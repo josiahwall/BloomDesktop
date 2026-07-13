@@ -7,13 +7,13 @@ import {
     afterEach,
     vi,
 } from "vitest";
-import TalkingBookTool from "./talkingBook";
+import TalkingBookTool from "./talkingBookTool";
 import AudioRecording, {
     theOneAudioRecorder,
     AudioMode,
     getAllAudioModes,
-    kAnyRecordingApiUrl,
 } from "./audioRecording";
+import { kAnyRecordingApiUrl } from "../../js/audioUtils";
 import { RecordingMode } from "./recordingMode";
 import {
     SetupIFrameFromHtml,

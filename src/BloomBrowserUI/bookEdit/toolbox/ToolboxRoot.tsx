@@ -69,9 +69,11 @@ const toolIconPathByToolId: Record<string, string> = {
         "/bloom/bookEdit/toolbox/impairmentVisualizer/blind-eye-white.svg",
 };
 
+/*
 const legacyToolSubPathByToolId: Record<string, string> = {
     talkingBook: "talkingBook/talkingBookToolboxTool.html",
 };
+*/
 
 const toolboxHeaderIconStyles = css`
     width: 16px;
@@ -154,7 +156,7 @@ const makeSectionFromToolId = (toolId: string): ToolboxSection => {
         id: toolId,
         englishLabel: labelInfo.englishLabel,
         l10nKey: labelInfo.l10nKey,
-        legacyToolHtmlSubPath: legacyToolSubPathByToolId[toolId],
+        //legacyToolHtmlSubPath: legacyToolSubPathByToolId[toolId],
     };
 };
 
@@ -264,9 +266,11 @@ const ensureReactToolBodyElement = (
     // Do not create elements for legacy tools; they load their content from
     // legacyToolHtmlSubPath and their makeRootElement() implementations throw
     // "Method not implemented." if called directly.
+    /*
     if (legacyToolSubPathByToolId[normalizedToolId]) {
         return undefined;
     }
+    */
     const tool = getMasterToolList().find((candidate) => {
         return candidate.id() === normalizedToolId;
     });
@@ -457,6 +461,7 @@ export const ToolboxRoot: React.FunctionComponent = () => {
             return;
         }
 
+        /*
         const legacyToolHtmlSubPath = legacyToolSubPathByToolId[toolId];
         if (legacyToolHtmlSubPath) {
             try {
@@ -486,6 +491,7 @@ export const ToolboxRoot: React.FunctionComponent = () => {
             }
             return;
         }
+        */
 
         hydratedToolIds.current.delete(toolId);
     }, []);

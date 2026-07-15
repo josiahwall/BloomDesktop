@@ -1,33 +1,98 @@
 import { css, ThemeProvider } from "@emotion/react";
-import { FunctionComponent, useEffect, useState } from "react";
+import { FunctionComponent, useEffect, useRef, useState } from "react";
 import { toolboxTheme } from "../../../bloomMaterialUITheme";
 import { Span } from "../../../react_components/l10nComponents";
 import BloomButton from "../../../react_components/bloomButton";
 import { Link } from "../../../react_components/link";
 import { IAudioRecorder } from "./IAudioRecorder";
-import {
-    Status,
-    TalkingBookUiState,
-    kDefaultTalkingBookUiState,
-} from "./TalkingBookUiState";
-import { kBloomYellow } from "../../../utils/colorUtils";
+import { Status, TalkingBookUiState } from "./TalkingBookUiState";
+import { kBloomPanelBackground, kBloomYellow } from "../../../utils/colorUtils";
 import { RecordingMode } from "./recordingMode";
 import { TalkingBookAdvancedSection } from "./talkingBookAdvancedSection";
+import { BloomTooltip } from "../../../react_components/BloomToolTip";
+import { Menu } from "@mui/material";
+import { LocalizableMenuItem } from "../../../react_components/localizableMenuItem";
 
-const RecordingMeterAndText: FunctionComponent = () => {
+const RecordingMeterAndText: FunctionComponent<{
+    level: string;
+    inputDevice: { iconSrc: string; title: string };
+    shouldDisplay: boolean;
+    audioDevices: string[];
+    audioRecorder: IAudioRecorder;
+}> = (props) => {
+    const meterCanvasRef = useRef<HTMLCanvasElement>(null);
+
+    useEffect(() => {
+        const meterCanvas = meterCanvasRef.current;
+        if (!meterCanvas) return;
+        const ctx = meterCanvas.getContext("2d");
+        if (!ctx) return;
+        const height = 15;
+        const width = 80;
+
+        ctx.fillStyle = window.getComputedStyle(
+            meterCanvas.parentElement!,
+        ).backgroundColor!;
+
+        ctx.fillRect(0, 0, width, height);
+
+        // Draw the appropriate number and color of bars
+        const gap = 2;
+        const barWidth = 4;
+        const interval = gap + barWidth;
+        const bars = Math.floor(width / interval);
+        const loudBars = 2;
+        const quietBars = 2;
+        const mediumBars = Math.max(bars - (loudBars + quietBars), 1);
+        const showBars = Math.floor(bars * parseFloat(props.level)); // + 1;
+        ctx.fillStyle = "#D2D2D2"; // should match text color or "#00FF00";
+        for (let i = 0; i < showBars; i++) {
+            const left = interval * i;
+            if (i >= quietBars) ctx.fillStyle = "#0C8597";
+            if (i >= quietBars + mediumBars) ctx.fillStyle = "#FF0000"; //red
+            ctx.fillRect(left, 0, barWidth, height);
+        }
+    }, [props.level]);
     return (
         <>
             <div>
-                <span>1)</span>
+                <span>{"1) "}</span>
                 <Span l10nKey="EditTab.Toolbox.TalkingBookTool.CheckSettingsLabel">
                     Check that you are recording into the correct device and
                     that these levels are showing blue:
                 </Span>
             </div>
-            <img
-                src="/bloom/bookEdit/toolbox/talkingBook/microphone.svg"
-                alt="mic"
-            ></img>
+            <BloomTooltip
+                tip={props.inputDevice.title}
+                placement="bottom-end"
+                slotProps={{
+                    tooltip: { sx: { width: "auto", maxWidth: "165px" } },
+                }}
+            >
+                <img
+                    onClick={() => props.audioRecorder.changeInputDevice()}
+                    width={30}
+                    height={30}
+                    src={props.inputDevice.iconSrc}
+                    alt="mic"
+                ></img>
+            </BloomTooltip>
+            <canvas ref={meterCanvasRef} width={80} height={15}></canvas>
+            <Menu
+                open={props.shouldDisplay}
+                css={css`
+                    z-index: 18002;
+                `}
+            >
+                {props.audioDevices.map((item, index) => (
+                    <LocalizableMenuItem
+                        key={index}
+                        onClick={() => props.audioRecorder.setInputDevice(item)}
+                        english={item.replace(/Microphone \(([^\)]*)\)?/, "$1")}
+                        l10nId={null}
+                    />
+                ))}
+            </Menu>
         </>
     );
 };
@@ -83,7 +148,7 @@ const RecordButton: FunctionComponent<{
                         : "White"};
                 `}
             >
-                <span>3)</span>
+                <span>{"3) "}</span>
                 <Span l10nKey="EditTab.Toolbox.TalkingBookTool.SpeakLabel">
                     Speak
                 </Span>
@@ -141,7 +206,7 @@ const PlayButton: FunctionComponent<{
                         : "White"};
                 `}
             >
-                {props.status !== Status.Active && <span>4)</span>}
+                {props.status !== Status.Active && <span>{"4) "}</span>}
                 <Span
                     l10nKey={
                         props.status === Status.Active
@@ -149,7 +214,7 @@ const PlayButton: FunctionComponent<{
                             : "EditTab.Toolbox.TalkingBookTool.CheckLabel"
                     }
                 >
-                    {props.status === Status.Active ? "Check" : "Pause"}
+                    {props.status !== Status.Active ? "Check" : "Pause"}
                 </Span>
             </div>
         </>
@@ -189,7 +254,7 @@ const AdjustTimingsButton: FunctionComponent<{
                         : "White"};
                 `}
             >
-                <span>5)</span>
+                <span>{"5) "}</span>
                 <Span l10nKey="EditTab.Toolbox.TalkingBookTool.AdjustTimings">
                     Adjust Timings...
                 </Span>
@@ -237,9 +302,8 @@ const NextButton: FunctionComponent<{
             >
                 <span>
                     {props.audioRecorder.recordingMode === RecordingMode.TextBox
-                        ? "6"
-                        : "5"}
-                    )
+                        ? "6) "
+                        : "5) "}
                 </span>
                 <Span l10nKey="EditTab.Toolbox.TalkingBookTool.NextLabel">
                     Next
@@ -388,9 +452,28 @@ export const TalkingBookToolControls: FunctionComponent<{
 
     return (
         <ThemeProvider theme={toolboxTheme}>
-            <RecordingMeterAndText />
+            {uiState.inShowPlaybackOrderMode && (
+                <div
+                    css={css`
+                        z-index: 1001;
+                        opacity: 0.7;
+                        position: fixed;
+                        top: inherit;
+                        background-color: ${kBloomPanelBackground};
+                        height: 100%;
+                        width: calc(100% - 20px);
+                    `}
+                ></div>
+            )}
+            <RecordingMeterAndText
+                level={uiState.peakLevel}
+                inputDevice={uiState.inputDevice}
+                shouldDisplay={uiState.shouldShowDeviceMenu}
+                audioDevices={uiState.audioDevices}
+                audioRecorder={props.audioRecorder}
+            />
             <div>
-                <span>2)</span>
+                <span>{"2) "}</span>
                 <Span l10nKey="EditTab.Toolbox.TalkingBookTool.LookAtSentenceLabel">
                     Look at the highlighted text
                 </Span>
@@ -450,12 +533,19 @@ export const TalkingBookToolControls: FunctionComponent<{
                     props.audioRecorder.setShowingImageDescriptions(isOn)
                 }
             />
-            <Link
-                l10nKey="Common.Help"
-                href="/bloom/api/help?topic=Tasks/Edit_tasks/Record_Audio/Talking_Book_Tool_overview.htm"
+            <div
+                css={css`
+                    position: relative;
+                    z-index: 1002;
+                `}
             >
-                Help
-            </Link>
+                <Link
+                    l10nKey="Common.Help"
+                    href="/bloom/api/help?topic=Tasks/Edit_tasks/Record_Audio/Talking_Book_Tool_overview.htm"
+                >
+                    Help
+                </Link>
+            </div>
         </ThemeProvider>
     );
 };

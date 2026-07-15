@@ -27,6 +27,8 @@ export interface IAudioRecorder {
     getPageDocBody: () => HTMLElement | null;
     getCurrentTextBox: () => HTMLElement | null;
     recordingMode: RecordingMode;
+    changeInputDevice(): void;
+    setInputDevice(device: any): void;
     startRecordCurrentAsync(): Promise<void>;
     endRecordCurrentAsync(): Promise<void>;
     togglePlayCurrentAsync(): Promise<void>;

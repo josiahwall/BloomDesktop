@@ -258,7 +258,12 @@ export default class AudioRecording implements IAudioRecorder {
         haveACurrentTextboxModeRecording: false,
         inShowPlaybackOrderMode: false,
         showingImageDescriptions: false,
+        inputDevice: { iconSrc: "", title: "" },
+        shouldShowDeviceMenu: false,
+        audioDevices: [],
         disableEverything: false,
+
+        peakLevel: "",
         isPlaying: false,
     };
 
@@ -364,7 +369,7 @@ export default class AudioRecording implements IAudioRecorder {
         delegationRoot
             .off("click" + ns, "#audio-input-dev")
             .on("click" + ns, "#audio-input-dev", () =>
-                this.selectInputDevice(),
+                this.changeInputDevice(),
             );
     }
 
@@ -603,7 +608,9 @@ export default class AudioRecording implements IAudioRecorder {
 
     private audioLevelListener = (e: IBloomWebSocketEvent) => {
         if (e.id === "peakAudioLevel")
-            this.setStaticPeakLevel(e.message ? e.message : "");
+            this.uiState.peakLevel = e.message ? e.message : "";
+        this.notifyStateChanged();
+        //this.setStaticPeakLevel(e.message ? e.message : "");
     };
 
     public addMicErrorListener(): void {
@@ -1935,7 +1942,23 @@ export default class AudioRecording implements IAudioRecorder {
         return this.changeStateAndSetExpectedAsync("split");
     }
 
-    private selectInputDevice(): void {
+    public setInputDevice(device: any): void {
+        if (this.uiState.shouldShowDeviceMenu)
+            this.uiState.shouldShowDeviceMenu = false;
+        this.notifyStateChanged();
+        axios
+            .post("/bloom/api/audio/currentRecordingDevice", device, {
+                headers: { "Content-Type": "text/plain" },
+            })
+            .then((result) => {
+                this.updateInputDeviceDisplay();
+            })
+            .catch((error) => {
+                toastr.error(error.statusText);
+            });
+    }
+
+    public changeInputDevice(): void {
         // REVIEW: this may in fact be unneeded but I'm just trying to get eslint set up and conceivably it is intentional
         // eslint-disable-next-line @typescript-eslint/no-this-alias
         const thisClass = this;
@@ -1945,27 +1968,24 @@ export default class AudioRecording implements IAudioRecorder {
             // Something like {"devices":["microphone", "Logitech Headset"], "productName":"Logitech Headset", "genericName":"Headset" },
             // except that in practice currrently the generic and product names are the same and not as helpful as the above.
             if (data.devices.length <= 1) return; // no change is possible.
+            /*
             if (data.devices.length == 2) {
                 // Just toggle between them
                 const device =
                     data.devices[0] == data.productName
                         ? data.devices[1]
                         : data.devices[0];
-                axios
-                    .post("/bloom/api/audio/currentRecordingDevice", device, {
-                        headers: { "Content-Type": "text/plain" },
-                    })
-                    .then((result) => {
-                        this.updateInputDeviceDisplay();
-                    })
-                    .catch((error) => {
-                        toastr.error(error.statusText);
-                    });
+                this.setInputDevice(device);
                 return;
             }
+            
             const devList = $("#audio-devlist");
             devList.empty();
+            */
+            this.uiState.audioDevices = [];
             for (let i = 0; i < data.devices.length; i++) {
+                this.uiState.audioDevices.push(data.devices[i]);
+                /*
                 // convert "Microphone (xxxx)" --> xxxx, where the final ')' is often missing (cut off somewhere upstream)
                 let label = data.devices[i].replace(
                     /Microphone \(([^\)]*)\)?/,
@@ -1977,7 +1997,11 @@ export default class AudioRecording implements IAudioRecorder {
                 const menuItem = devList.append(
                     '<li data-choice="' + i + '">' + label + "</li>",
                 );
+                */
             }
+            this.uiState.shouldShowDeviceMenu = true;
+            this.notifyStateChanged();
+            /*
             (<any>devList)
                 .one(
                     "click",
@@ -2004,6 +2028,7 @@ export default class AudioRecording implements IAudioRecorder {
                     at: "left bottom",
                     of: $("#audio-input-dev"),
                 });
+            */
         });
     }
 
@@ -2049,9 +2074,14 @@ export default class AudioRecording implements IAudioRecorder {
             if (!data.genericName && !data.productName)
                 imageSrc = "/bloom/images/Attention.svg";
 
+            this.uiState.inputDevice.iconSrc = imageSrc;
+            this.uiState.inputDevice.title = productName;
+            this.notifyStateChanged();
+            /*
             const devButton = $("#audio-input-dev");
             devButton.attr("src", imageSrc);
             devButton.attr("title", productName);
+            */
         });
     }
 
@@ -2130,9 +2160,12 @@ export default class AudioRecording implements IAudioRecorder {
     }
 
     private doesRecordingExistForCurrentSelection(): boolean {
+        return this.getStatus("play") === Status.Enabled;
+        /*
         return document
             .getElementById("audio-play")!
             .classList.contains("enabled");
+        */
     }
 
     // Update the input element (checkbox) and turn on the playback order controls on the visible

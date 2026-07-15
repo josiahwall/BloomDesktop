@@ -171,7 +171,7 @@ export function getAudioRecorder(): IAudioRecorder {
 export default class AudioRecording implements IAudioRecorder {
     private readonly delegatedEventsNamespace = ".audioRecorder";
     private recording: boolean;
-    private levelCanvas: HTMLCanvasElement;
+    private levelCanvas: HTMLCanvasElement | null = null;
     private currentAudioId: string;
     // When we are playing audio, this holds the segments we haven't yet finished playing, including the one currently playing.
     // Thus, when it's empty we are not playing audio at all
@@ -219,10 +219,7 @@ export default class AudioRecording implements IAudioRecorder {
         // when we need to fetch from Collection Settings vs. when it's already set.
         this.recordingMode = RecordingMode.Unknown;
 
-        this.levelCanvas = <HTMLCanvasElement>(
-            document.getElementById("audio-meter")!
-        );
-
+        this.updateInputDeviceDisplay();
         this.updateDisplay(maySetHighlight); // review is the the best time?
     }
 
@@ -252,19 +249,13 @@ export default class AudioRecording implements IAudioRecorder {
             listen: Status.Disabled,
         },
         recordingMode: RecordingMode.Unknown,
-        splitButtonVisible: false,
         hasAudio: false,
-        hasRecordableDivs: this.getRecordableDivs(true, false).length > 0,
+        hasRecordableDivs: false,
         haveACurrentTextboxModeRecording: false,
         inShowPlaybackOrderMode: false,
         showingImageDescriptions: false,
-        inputDevice: { iconSrc: "", title: "" },
         shouldShowDeviceMenu: false,
         audioDevices: [],
-        disableEverything: false,
-
-        peakLevel: "",
-        isPlaying: false,
     };
 
     public registerStateListener(
@@ -608,9 +599,7 @@ export default class AudioRecording implements IAudioRecorder {
 
     private audioLevelListener = (e: IBloomWebSocketEvent) => {
         if (e.id === "peakAudioLevel")
-            this.uiState.peakLevel = e.message ? e.message : "";
-        this.notifyStateChanged();
-        //this.setStaticPeakLevel(e.message ? e.message : "");
+            this.setStaticPeakLevel(e.message ? e.message : "");
     };
 
     public addMicErrorListener(): void {
@@ -1942,10 +1931,14 @@ export default class AudioRecording implements IAudioRecorder {
         return this.changeStateAndSetExpectedAsync("split");
     }
 
-    public setInputDevice(device: any): void {
+    public closeDeviceSelectMenu(): void {
         if (this.uiState.shouldShowDeviceMenu)
             this.uiState.shouldShowDeviceMenu = false;
         this.notifyStateChanged();
+    }
+
+    public setInputDevice(device: any): void {
+        this.closeDeviceSelectMenu();
         axios
             .post("/bloom/api/audio/currentRecordingDevice", device, {
                 headers: { "Content-Type": "text/plain" },
@@ -1968,7 +1961,7 @@ export default class AudioRecording implements IAudioRecorder {
             // Something like {"devices":["microphone", "Logitech Headset"], "productName":"Logitech Headset", "genericName":"Headset" },
             // except that in practice currrently the generic and product names are the same and not as helpful as the above.
             if (data.devices.length <= 1) return; // no change is possible.
-            /*
+
             if (data.devices.length == 2) {
                 // Just toggle between them
                 const device =
@@ -1978,7 +1971,7 @@ export default class AudioRecording implements IAudioRecorder {
                 this.setInputDevice(device);
                 return;
             }
-            
+            /*
             const devList = $("#audio-devlist");
             devList.empty();
             */
@@ -2074,8 +2067,15 @@ export default class AudioRecording implements IAudioRecorder {
             if (!data.genericName && !data.productName)
                 imageSrc = "/bloom/images/Attention.svg";
 
-            this.uiState.inputDevice.iconSrc = imageSrc;
-            this.uiState.inputDevice.title = productName;
+            if (!this.uiState.inputDevice) {
+                this.uiState.inputDevice = {
+                    iconSrc: imageSrc,
+                    title: productName,
+                };
+            } else {
+                this.uiState.inputDevice.iconSrc = imageSrc;
+                this.uiState.inputDevice.title = productName;
+            }
             this.notifyStateChanged();
             /*
             const devButton = $("#audio-input-dev");
@@ -3387,22 +3387,21 @@ export default class AudioRecording implements IAudioRecorder {
         return firstSentence;
     }
 
+    public setLevelCanvas(canvas: HTMLCanvasElement | null) {
+        this.levelCanvas = canvas;
+    }
+
     // This gets invoked via websocket message. It draws a series of bars
     // (reminiscent of leds in a hardware level meter) within the canvas in the
     //  top right of the bubble to indicate the current peak level.
     public setStaticPeakLevel(level: string): void {
-        if (!this.levelCanvas) return; // just in case C# calls this unexpectedly
+        if (!this.levelCanvas) return;
         const ctx = this.levelCanvas.getContext("2d");
         if (!ctx) return;
-        // Erase the whole canvas
         const height = 15;
         const width = 80;
 
-        ctx.fillStyle = window.getComputedStyle(
-            this.levelCanvas.parentElement!,
-        ).backgroundColor!;
-
-        ctx.fillRect(0, 0, width, height);
+        ctx.clearRect(0, 0, width, height);
 
         // Draw the appropriate number and color of bars
         const gap = 2;

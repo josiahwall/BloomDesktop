@@ -27,6 +27,8 @@ export interface IAudioRecorder {
     getPageDocBody: () => HTMLElement | null;
     getCurrentTextBox: () => HTMLElement | null;
     recordingMode: RecordingMode;
+    setLevelCanvas(canvas: HTMLCanvasElement | null): void;
+    closeDeviceSelectMenu(): void;
     changeInputDevice(): void;
     setInputDevice(device: any): void;
     startRecordCurrentAsync(): Promise<void>;

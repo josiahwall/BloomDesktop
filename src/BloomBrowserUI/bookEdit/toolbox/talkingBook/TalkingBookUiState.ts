@@ -1,4 +1,3 @@
-import { StringListCheckbox } from "../../../react_components/stringListCheckbox";
 import { RecordingMode } from "./recordingMode";
 
 export enum Status {
@@ -14,17 +13,13 @@ export interface TalkingBookUiState {
         "record" | "play" | "split" | "next" | "prev" | "clear" | "listen",
         Status
     >;
-    isPlaying: boolean; // drives the Check/Pause label swap
-    splitButtonVisible: boolean; // today: updateSplitButton's wrapper classes
     recordingMode: RecordingMode;
     hasAudio: boolean;
     hasRecordableDivs: boolean;
     haveACurrentTextboxModeRecording: boolean;
     inShowPlaybackOrderMode: boolean;
     showingImageDescriptions: boolean;
-    inputDevice: { iconSrc: string; title: string };
+    inputDevice?: { iconSrc: string; title: string };
     shouldShowDeviceMenu: boolean;
     audioDevices: string[];
-    peakLevel: string;
-    disableEverything: boolean; // the overlay
 }

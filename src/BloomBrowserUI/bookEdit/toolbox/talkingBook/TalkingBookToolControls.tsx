@@ -56,28 +56,35 @@ const RecordingMeterAndText: FunctionComponent<{
                     margin-bottom: 12px;
                 `}
             >
-                {props.inputDevice && (
-                    <BloomTooltip
-                        tip={props.inputDevice.title}
-                        placement="bottom-end"
-                        slotProps={{
-                            tooltip: {
-                                sx: { width: "auto", maxWidth: "165px" },
-                            },
+                <BloomTooltip
+                    tip={props.inputDevice ? props.inputDevice.title : ""}
+                    placement="bottom-end"
+                    slotProps={{
+                        tooltip: {
+                            sx: { width: "auto", maxWidth: "165px" },
+                        },
+                    }}
+                >
+                    <img
+                        onClick={(event) => {
+                            setMenuAnchor(event.currentTarget);
+                            props.audioRecorder.changeInputDevice();
                         }}
-                    >
-                        <img
-                            onClick={(event) => {
-                                setMenuAnchor(event.currentTarget);
-                                props.audioRecorder.changeInputDevice();
-                            }}
-                            width={30}
-                            height={30}
-                            src={props.inputDevice.iconSrc}
-                            alt="mic"
-                        ></img>
-                    </BloomTooltip>
-                )}
+                        width={30}
+                        height={30}
+                        src={
+                            props.inputDevice
+                                ? props.inputDevice.iconSrc
+                                : "/bloom/bookEdit/toolbox/talkingBook/microphone.svg"
+                        }
+                        alt="mic"
+                        css={css`
+                            &:hover {
+                                transform: scale(1.05);
+                            }
+                        `}
+                    ></img>
+                </BloomTooltip>
                 <canvas ref={meterCanvasRef} width={80} height={15}></canvas>
             </div>
             <ThemeProvider theme={toolboxMenuPopupTheme}>
@@ -130,23 +137,45 @@ const RecordingMeterAndText: FunctionComponent<{
     );
 };
 
-const RecordButton: FunctionComponent<{
+const TalkingBookButton: FunctionComponent<{
     status: Status;
-    audioRecorder: IAudioRecorder;
+    enabledImgFile: string;
+    expectedImgFile?: string;
+    activeImgFile?: string;
+    size: number;
+    dontMoveRight?: boolean;
+    stepNum?: number;
+    hideStepNum?: boolean;
+    l10nKey: string;
+    l10nText: string;
+    onMouseDown?: () => void;
+    onMouseUp?: () => void;
+    onClickCapture?: (event) => void;
+    onClick?: () => void;
 }> = (props) => {
-    let imgFile = "";
-    switch (props.status) {
+    const {
+        status,
+        enabledImgFile,
+        expectedImgFile,
+        activeImgFile,
+        size,
+        dontMoveRight,
+        stepNum,
+        hideStepNum,
+        l10nKey,
+        l10nText,
+        ...possibleEventHandlers
+    } = props;
+    let imgFile = enabledImgFile;
+    switch (status) {
         case Status.Active:
-            imgFile = "record_active.svg";
-            break;
-        case Status.Disabled:
-            imgFile = "record_enabled.svg";
-            break;
-        case Status.Enabled:
-            imgFile = "record_enabled.svg";
+            imgFile = activeImgFile ?? enabledImgFile;
             break;
         case Status.Expected:
-            imgFile = "record_expected.svg";
+            imgFile = expectedImgFile ?? enabledImgFile;
+            break;
+        default:
+            imgFile = enabledImgFile;
             break;
     }
     return (
@@ -161,413 +190,43 @@ const RecordButton: FunctionComponent<{
             <BloomButton
                 l10nKey="already-localized"
                 variant="text"
-                enabled={props.status !== Status.Disabled}
+                enabled={status !== Status.Disabled}
                 hasText={false}
                 alreadyLocalized={true}
-                enabledImageFile={`/bloom/bookEdit/toolbox/talkingBook/${imgFile}`}
-                disabledImageFile={`/bloom/bookEdit/toolbox/talkingBook/${imgFile}`}
+                enabledImageFile={imgFile}
+                disabledImageFile={imgFile}
                 disableRipple
                 disableFocusRipple
-                onMouseDown={() => {
-                    props.audioRecorder.startRecordCurrentAsync();
-                }}
-                onMouseUp={() => {
-                    props.audioRecorder.endRecordCurrentAsync();
-                }}
                 css={css`
-                    width: 40px;
-                    height: 40px;
-                    opacity: ${props.status !== Status.Disabled ? 1 : 0.4};
+                    width: ${size}px;
+                    height: ${size}px;
+                    pointer-events: none;
+                    opacity: ${status !== Status.Disabled ? 1 : 0.4};
                     img {
-                        height: 40px;
-                        width: 40px;
+                        height: ${size}px;
+                        width: ${size}px;
                         margin-left: -20px;
+                        pointer-events: auto;
                     }
                     &:hover {
                         background-color: transparent;
+                        transform: ${status !== Status.Disabled
+                            ? `translateX(${dontMoveRight ? "0px" : "0.5px"}) scale(1.05)`
+                            : "none"};
                     }
                 `}
+                {...possibleEventHandlers}
             ></BloomButton>
             <div
                 css={css`
-                    color: ${props.status === Status.Expected
+                    color: ${status === Status.Expected
                         ? kBloomYellow
                         : kBloomBuff};
                 `}
             >
-                <span>{"3) "}</span>
-                <Span l10nKey="EditTab.Toolbox.TalkingBookTool.SpeakLabel">
-                    Speak
-                </Span>
+                {!hideStepNum && stepNum && <span>{`${stepNum}) `}</span>}
+                <Span l10nKey={l10nKey}>{l10nText}</Span>
             </div>
-        </div>
-    );
-};
-
-const PlayButton: FunctionComponent<{
-    status: Status;
-    audioRecorder: IAudioRecorder;
-}> = (props) => {
-    let imgFile = "";
-    switch (props.status) {
-        case Status.Active:
-            imgFile = "/bloom/bookEdit/toolbox/talkingBook/pause_yellow.svg";
-            break;
-        case Status.Disabled:
-            imgFile = "/bloom/images/play_enabled.svg";
-            break;
-        case Status.Enabled:
-            imgFile = "/bloom/images/play_enabled.svg";
-            break;
-        case Status.Expected:
-            imgFile = "/bloom/bookEdit/toolbox/talkingBook/play_expected.svg";
-            break;
-    }
-
-    return (
-        <div
-            css={css`
-                display: flex;
-                align-items: center;
-                margin-top: 10px;
-                margin-bottom: 5px;
-            `}
-        >
-            <BloomButton
-                l10nKey="already-localized"
-                variant="text"
-                enabled={props.status !== Status.Disabled}
-                hasText={false}
-                alreadyLocalized={true}
-                enabledImageFile={`${imgFile}`}
-                disabledImageFile={`${imgFile}`}
-                disableRipple
-                disableFocusRipple
-                onClickCapture={(event) => {
-                    if (event.ctrlKey) {
-                        props.audioRecorder.playESpeakPreview();
-                    } else {
-                        props.audioRecorder.togglePlayCurrentAsync();
-                    }
-                }}
-                css={css`
-                    width: 45px;
-                    height: 45px;
-                    opacity: ${props.status !== Status.Disabled ? 1 : 0.4};
-                    img {
-                        height: 45px;
-                        width: 45px;
-                        margin-left: -20px;
-                    }
-                    &:hover {
-                        background-color: transparent;
-                    }
-                `}
-            ></BloomButton>
-            <div
-                css={css`
-                    color: ${props.status === Status.Expected
-                        ? kBloomYellow
-                        : kBloomBuff};
-                `}
-            >
-                {props.status !== Status.Active && <span>{"4) "}</span>}
-                <Span
-                    l10nKey={
-                        props.status === Status.Active
-                            ? "Common.Pause"
-                            : "EditTab.Toolbox.TalkingBookTool.CheckLabel"
-                    }
-                >
-                    {props.status !== Status.Active ? "Check" : "Pause"}
-                </Span>
-            </div>
-        </div>
-    );
-};
-
-const AdjustTimingsButton: FunctionComponent<{
-    status: Status;
-    audioRecorder: IAudioRecorder;
-}> = (props) => {
-    return (
-        <div
-            css={css`
-                display: flex;
-                align-items: center;
-                margin-top: 10px;
-                margin-bottom: 5px;
-            `}
-        >
-            <BloomButton
-                l10nKey="already-localized"
-                variant="text"
-                enabled={props.status !== Status.Disabled}
-                hasText={false}
-                alreadyLocalized={true}
-                enabledImageFile="/bloom/bookEdit/toolbox/talkingBook/adjustTimings.svg"
-                disabledImageFile="/bloom/bookEdit/toolbox/talkingBook/adjustTimings.svg"
-                disableRipple
-                disableFocusRipple
-                onClick={() => {
-                    props.audioRecorder.showAdjustTimingsDialog();
-                }}
-                css={css`
-                    width: 45px;
-                    height: 45px;
-                    opacity: ${props.status !== Status.Disabled ? 1 : 0.4};
-                    img {
-                        height: 45px;
-                        width: 45px;
-                        margin-left: -20px;
-                    }
-                    &:hover {
-                        background-color: transparent;
-                    }
-                `}
-            ></BloomButton>
-            <div
-                css={css`
-                    color: ${props.status === Status.Expected
-                        ? kBloomYellow
-                        : kBloomBuff};
-                `}
-            >
-                <span>{"5) "}</span>
-                <Span l10nKey="EditTab.Toolbox.TalkingBookTool.AdjustTimings">
-                    Adjust Timings...
-                </Span>
-            </div>
-        </div>
-    );
-};
-
-const NextButton: FunctionComponent<{
-    status: Status;
-    audioRecorder: IAudioRecorder;
-}> = (props) => {
-    let imgFile =
-        props.status === Status.Expected
-            ? "next_expected.svg"
-            : "next_enabled.svg";
-    return (
-        <div
-            css={css`
-                display: flex;
-                align-items: center;
-                margin-top: 10px;
-                margin-bottom: 5px;
-            `}
-        >
-            <BloomButton
-                l10nKey="already-localized"
-                variant="text"
-                enabled={props.status !== Status.Disabled}
-                hasText={false}
-                alreadyLocalized={true}
-                enabledImageFile={`/bloom/bookEdit/toolbox/talkingBook/${imgFile}`}
-                disabledImageFile={`/bloom/bookEdit/toolbox/talkingBook/${imgFile}`}
-                disableRipple
-                disableFocusRipple
-                onClick={() => {
-                    props.audioRecorder.moveToNextAudioElement();
-                }}
-                css={css`
-                    width: 40px;
-                    height: 40px;
-                    opacity: ${props.status !== Status.Disabled ? 1 : 0.4};
-                    img {
-                        height: 40px;
-                        width: 40px;
-                        margin-left: -20px;
-                    }
-                    &:hover {
-                        background-color: transparent;
-                    }
-                `}
-            ></BloomButton>
-            <div
-                css={css`
-                    color: ${props.status === Status.Expected
-                        ? kBloomYellow
-                        : kBloomBuff};
-                `}
-            >
-                <span>
-                    {props.audioRecorder.recordingMode === RecordingMode.TextBox
-                        ? "6) "
-                        : "5) "}
-                </span>
-                <Span l10nKey="EditTab.Toolbox.TalkingBookTool.NextLabel">
-                    Next
-                </Span>
-            </div>
-        </div>
-    );
-};
-
-const PrevButton: FunctionComponent<{
-    status: Status;
-    audioRecorder: IAudioRecorder;
-}> = (props) => {
-    return (
-        <div
-            css={css`
-                display: flex;
-                align-items: center;
-                margin-top: 10px;
-                margin-bottom: 5px;
-            `}
-        >
-            <BloomButton
-                l10nKey="already-localized"
-                variant="text"
-                enabled={props.status !== Status.Disabled}
-                hasText={false}
-                alreadyLocalized={true}
-                enabledImageFile="/bloom/bookEdit/toolbox/talkingBook/prev_enabled.svg"
-                disabledImageFile="/bloom/bookEdit/toolbox/talkingBook/prev_enabled.svg"
-                disableRipple
-                disableFocusRipple
-                onClick={() =>
-                    props.audioRecorder.moveToPrevAudioElementAsync()
-                }
-                css={css`
-                    width: 20px;
-                    height: 20px;
-                    opacity: ${props.status !== Status.Disabled ? 1 : 0.4};
-                    img {
-                        height: 20px;
-                        width: 20px;
-                        margin-left: -20px;
-                    }
-                    &:hover {
-                        background-color: transparent;
-                    }
-                `}
-            ></BloomButton>
-            <Span
-                l10nKey="EditTab.Toolbox.TalkingBookTool.Back"
-                css={css`
-                    color: ${props.status === Status.Expected
-                        ? kBloomYellow
-                        : kBloomBuff};
-                `}
-            >
-                Back
-            </Span>
-        </div>
-    );
-};
-
-const ClearButton: FunctionComponent<{
-    status: Status;
-    audioRecorder: IAudioRecorder;
-}> = (props) => {
-    return (
-        <div
-            css={css`
-                display: flex;
-                align-items: center;
-                margin-top: 10px;
-                margin-bottom: 5px;
-            `}
-        >
-            <BloomButton
-                l10nKey="already-localized"
-                variant="text"
-                enabled={props.status !== Status.Disabled}
-                hasText={false}
-                alreadyLocalized={true}
-                enabledImageFile="/bloom/bookEdit/toolbox/talkingBook/clear_enabled.svg"
-                disabledImageFile="/bloom/bookEdit/toolbox/talkingBook/clear_enabled.svg"
-                disableRipple
-                disableFocusRipple
-                onClick={() => {
-                    props.audioRecorder.clearRecordingAsync();
-                }}
-                css={css`
-                    width: 20px;
-                    height: 20px;
-                    opacity: ${props.status !== Status.Disabled ? 1 : 0.4};
-                    img {
-                        height: 20px;
-                        width: 20px;
-                        margin-left: -20px;
-                    }
-                    &:hover {
-                        background-color: transparent;
-                    }
-                `}
-            ></BloomButton>
-            <Span
-                l10nKey="EditTab.Toolbox.TalkingBookTool.Clear"
-                css={css`
-                    color: ${props.status === Status.Expected
-                        ? kBloomYellow
-                        : kBloomBuff};
-                `}
-            >
-                Clear
-            </Span>
-        </div>
-    );
-};
-
-const ListenButton: FunctionComponent<{
-    status: Status;
-    audioRecorder: IAudioRecorder;
-}> = (props) => {
-    let imgFile =
-        props.status === Status.Active
-            ? "listen_active.svg"
-            : "listen_enabled.svg";
-    return (
-        <div
-            css={css`
-                display: flex;
-                align-items: center;
-                margin-top: 10px;
-                margin-bottom: 5px;
-            `}
-        >
-            <BloomButton
-                l10nKey="already-localized"
-                variant="text"
-                enabled={props.status !== Status.Disabled}
-                hasText={false}
-                alreadyLocalized={true}
-                enabledImageFile={`/bloom/bookEdit/toolbox/talkingBook/${imgFile}`}
-                disabledImageFile={`/bloom/bookEdit/toolbox/talkingBook/${imgFile}`}
-                disableRipple
-                disableFocusRipple
-                onClick={() => {
-                    props.audioRecorder.listenAsync();
-                }}
-                css={css`
-                    height: 40px;
-                    width: 40px;
-                    opacity: ${props.status !== Status.Disabled ? 1 : 0.4};
-                    img {
-                        height: 40px;
-                        width: 40px;
-                        margin-left: -20px;
-                    }
-                    &:hover {
-                        background-color: transparent;
-                    }
-                `}
-            ></BloomButton>
-            <Span
-                l10nKey="EditTab.Toolbox.TalkingBookTool.Listen"
-                css={css`
-                    color: ${props.status === Status.Expected
-                        ? kBloomYellow
-                        : kBloomBuff};
-                `}
-            >
-                Listen to the whole page
-            </Span>
         </div>
     );
 };
@@ -596,7 +255,7 @@ export const TalkingBookToolControls: FunctionComponent<{
                         top: inherit;
                         background-color: ${kBloomPanelBackground};
                         height: 100%;
-                        width: calc(100% - 20px);
+                        width: calc(100% - 15px);
                     `}
                 ></div>
             )}
@@ -624,36 +283,114 @@ export const TalkingBookToolControls: FunctionComponent<{
                         Look at the highlighted text
                     </Span>
                 </div>
-                <RecordButton
+                {/* record/speak button */}
+                <TalkingBookButton
                     status={uiState.buttons.record}
-                    audioRecorder={props.audioRecorder}
+                    enabledImgFile="/bloom/bookEdit/toolbox/talkingBook/record_enabled.svg"
+                    expectedImgFile="/bloom/bookEdit/toolbox/talkingBook/record_expected.svg"
+                    activeImgFile="/bloom/bookEdit/toolbox/talkingBook/record_active.svg"
+                    size={40}
+                    stepNum={3}
+                    l10nKey="EditTab.Toolbox.TalkingBookTool.SpeakLabel"
+                    l10nText="Speak"
+                    onMouseDown={() => {
+                        props.audioRecorder.startRecordCurrentAsync();
+                    }}
+                    onMouseUp={() => {
+                        props.audioRecorder.endRecordCurrentAsync();
+                    }}
                 />
-                <PlayButton
+                {/* play/check button */}
+                <TalkingBookButton
                     status={uiState.buttons.play}
-                    audioRecorder={props.audioRecorder}
+                    enabledImgFile="/bloom/images/play_enabled.svg"
+                    expectedImgFile="/bloom/bookEdit/toolbox/talkingBook/play_expected.svg"
+                    activeImgFile="/bloom/bookEdit/toolbox/talkingBook/pause_yellow.svg"
+                    size={45}
+                    stepNum={4}
+                    hideStepNum={uiState.buttons.play === Status.Active}
+                    l10nKey={
+                        uiState.buttons.play === Status.Active
+                            ? "Common.Pause"
+                            : "EditTab.Toolbox.TalkingBookTool.CheckLabel"
+                    }
+                    l10nText={
+                        uiState.buttons.play === Status.Active
+                            ? "Pause"
+                            : "Check"
+                    }
+                    onClickCapture={(event) => {
+                        if (event.ctrlKey) {
+                            props.audioRecorder.playESpeakPreview();
+                        } else {
+                            props.audioRecorder.togglePlayCurrentAsync();
+                        }
+                    }}
                 />
+                {/* adjust timings button, displayed only when recording the whole textbox */}
                 {props.audioRecorder.recordingMode ===
                     RecordingMode.TextBox && (
-                    <AdjustTimingsButton
+                    <TalkingBookButton
                         status={uiState.buttons.split}
-                        audioRecorder={props.audioRecorder}
+                        enabledImgFile="/bloom/bookEdit/toolbox/talkingBook/adjustTimings.svg"
+                        size={45}
+                        dontMoveRight
+                        stepNum={5}
+                        l10nKey="EditTab.Toolbox.TalkingBookTool.AdjustTimings"
+                        l10nText="Adjust Timings..."
+                        onClick={() => {
+                            props.audioRecorder.showAdjustTimingsDialog();
+                        }}
                     />
                 )}
-                <NextButton
+                {/* next button */}
+                <TalkingBookButton
                     status={uiState.buttons.next}
-                    audioRecorder={props.audioRecorder}
+                    enabledImgFile="/bloom/bookEdit/toolbox/talkingBook/next_enabled.svg"
+                    expectedImgFile="/bloom/bookEdit/toolbox/talkingBook/next_expected.svg"
+                    size={40}
+                    stepNum={
+                        uiState.recordingMode === RecordingMode.TextBox ? 6 : 5
+                    }
+                    l10nKey="EditTab.Toolbox.TalkingBookTool.NextLabel"
+                    l10nText="Next"
+                    onClick={() => {
+                        props.audioRecorder.moveToNextAudioElement();
+                    }}
                 />
-                <PrevButton
+                {/* back/prev button */}
+                <TalkingBookButton
                     status={uiState.buttons.prev}
-                    audioRecorder={props.audioRecorder}
+                    enabledImgFile="/bloom/bookEdit/toolbox/talkingBook/prev_enabled.svg"
+                    size={20}
+                    l10nKey="EditTab.Toolbox.TalkingBookTool.Back"
+                    l10nText="Back"
+                    onClick={() => {
+                        props.audioRecorder.moveToPrevAudioElementAsync();
+                    }}
                 />
-                <ClearButton
+                {/* clear button */}
+                <TalkingBookButton
                     status={uiState.buttons.clear}
-                    audioRecorder={props.audioRecorder}
+                    enabledImgFile="/bloom/bookEdit/toolbox/talkingBook/clear_enabled.svg"
+                    size={20}
+                    l10nKey="EditTab.Toolbox.TalkingBookTool.Clear"
+                    l10nText="Clear"
+                    onClick={() => {
+                        props.audioRecorder.clearRecordingAsync();
+                    }}
                 />
-                <ListenButton
+                {/* listen to whole page button */}
+                <TalkingBookButton
                     status={uiState.buttons.listen}
-                    audioRecorder={props.audioRecorder}
+                    enabledImgFile="/bloom/bookEdit/toolbox/talkingBook/listen_enabled.svg"
+                    activeImgFile="/bloom/bookEdit/toolbox/talkingBook/listen_active.svg"
+                    size={40}
+                    l10nKey="EditTab.Toolbox.TalkingBookTool.Listen"
+                    l10nText="Listen to the whole page"
+                    onClick={() => {
+                        props.audioRecorder.listenAsync();
+                    }}
                 />
                 <TalkingBookAdvancedSection
                     recordingMode={uiState.recordingMode}

@@ -56,7 +56,6 @@ import PlaybackOrderControls from "../../../react_components/playbackOrderContro
 import Recordable from "./recordable";
 import { getChecksum } from "../../js/talkingBookChecksum";
 import { setupImageDescriptions } from "../imageDescription/imageDescription";
-import { TalkingBookAdvancedSection } from "./talkingBookAdvancedSection";
 import { EditableDivUtils } from "../../js/editableDivUtils";
 import { createValidXhtmlUniqueId } from "../../js/xhtmlIdUtils";
 import { doesNarrationExist, kAnyRecordingApiUrl } from "../../js/audioUtils";
@@ -126,8 +125,6 @@ const kBloomEditableTextBoxSelector = "div.bloom-editable";
 const kBloomTranslationGroupClass = "bloom-translationGroup";
 const kBloomVisibleClass = "bloom-visibility-code-on";
 
-const kAudioSplitId = "audio-split";
-
 const kEndTimeAttributeName: string = "data-audioRecordingEndTimes";
 
 interface IPlaybackOrderInfo {
@@ -169,7 +166,6 @@ export function getAudioRecorder(): IAudioRecorder {
 
 // TODO: Maybe a lot of this code should move to TalkingBook.ts (regarding the tool) instead of AudioRecording.ts (regarding recording/playing the audio files)
 export default class AudioRecording implements IAudioRecorder {
-    private readonly delegatedEventsNamespace = ".audioRecorder";
     private recording: boolean;
     private levelCanvas: HTMLCanvasElement | null = null;
     private currentAudioId: string;
@@ -182,8 +178,6 @@ export default class AudioRecording implements IAudioRecorder {
     private subElementsWithTimings: [Element, number][] = [];
     private currentAudioSessionNum: number = 0;
     private awaitingNewRecording: boolean;
-
-    private audioSplitButton: HTMLButtonElement;
 
     private showingImageDescriptions: boolean;
     public recordingMode: RecordingMode;
@@ -208,13 +202,8 @@ export default class AudioRecording implements IAudioRecorder {
     public __testonly__sentenceToIdListMap = this.sentenceToIdListMap; // Exposing it for unit tests. Not meant for public use.
 
     private playbackOrderCache: IPlaybackOrderInfo[] = [];
-    private disablingOverlay: HTMLDivElement;
 
     constructor(maySetHighlight: boolean = true) {
-        this.audioSplitButton = <HTMLButtonElement>(
-            document.getElementById(kAudioSplitId)!
-        );
-
         // Initialize to Unknown (as opposed to setting to the default Sentence) so we can identify
         // when we need to fetch from Collection Settings vs. when it's already set.
         this.recordingMode = RecordingMode.Unknown;
@@ -279,104 +268,6 @@ export default class AudioRecording implements IAudioRecorder {
             ...this.uiState,
             buttons: { ...this.uiState.buttons },
         };
-    }
-
-    private bindDocumentDelegatedHandlers(): void {
-        // Bind the toolbar buttons using delegated handlers on a stable root
-        // ($(document)) rather than directly on the button elements. The toolbox
-        // re-hydrates the tool body (ToolboxRoot's LiveToolBodyHost does
-        // host.innerHTML = "" and re-inserts the markup), which destroys the
-        // button nodes these handlers were attached to and replaces them with
-        // fresh nodes that have no handlers. The result is buttons that look
-        // enabled but do nothing, because direct (non-delegated) handlers live on
-        // the specific DOM node, which no longer exists. Delegating from $(document)
-        // with a namespaced event survives that re-creation, and the namespaced
-        // .off() prevents handlers being added twice if the tool is reopened.
-        // (This matches the delegation pattern in readers/readerTools.ts.)
-        const delegationRoot = $(document);
-        const ns = this.delegatedEventsNamespace;
-
-        delegationRoot
-            .off("click" + ns, "#audio-next")
-            .on("click" + ns, "#audio-next", () =>
-                this.moveToNextAudioElement(),
-            );
-        delegationRoot
-            .off("click" + ns, "#audio-prev")
-            .on("click" + ns, "#audio-prev", () =>
-                this.moveToPrevAudioElementAsync(),
-            );
-        delegationRoot
-            .off("mousedown" + ns + " mouseup" + ns, "#audio-record")
-            .on("mousedown" + ns, "#audio-record", () =>
-                this.startRecordCurrentAsync(),
-            )
-            .on("mouseup" + ns, "#audio-record", () =>
-                this.endRecordCurrentAsync(),
-            );
-        delegationRoot
-            .off("click" + ns, "#audio-play")
-            .on("click" + ns, "#audio-play", (e) => {
-                if (!e.ctrlKey) {
-                    // Normal case
-                    this.togglePlayCurrentAsync();
-                } else {
-                    // Control + Click case: Special debug mode
-                    this.playESpeakPreview();
-                }
-            });
-        delegationRoot
-            .off("click" + ns, "#audio-split")
-            .on("click" + ns, "#audio-split", async () => {
-                const mediaPlayer = this.getMediaPlayer();
-                mediaPlayer.pause();
-                getWorkspaceBundleExports().showAdjustTimingsDialogFromWorkspaceRoot(
-                    this.split,
-                    this.editTimingsFileAsync,
-                    this.applyTimingsFileAsync,
-                    (canceled) => {
-                        if (!canceled) {
-                            this.changeStateAndSetExpectedAsync("next");
-                            this.updatePlayerStatus();
-                        }
-                    },
-                );
-            });
-        delegationRoot
-            .off("click" + ns, "#audio-listen")
-            .on("click" + ns, "#audio-listen", () => this.listenAsync());
-        delegationRoot
-            .off("click" + ns, "#audio-clear")
-            .on("click" + ns, "#audio-clear", () => this.clearRecordingAsync());
-
-        // Wire the media player's event handlers. They are (re)applied lazily in
-        // getMediaPlayer() so they survive the toolbox re-hydrating and replacing
-        // the #player element. Media events (ended/durationchange/error) don't
-        // bubble, so unlike the buttons they can't be delegated; instead we detect
-        // a replaced node and re-attach. Calling getMediaPlayer() here forces the
-        // initial wiring.
-        this.getMediaPlayer();
-
-        delegationRoot
-            .off("click" + ns, "#audio-input-dev")
-            .on("click" + ns, "#audio-input-dev", () =>
-                this.changeInputDevice(),
-            );
-    }
-
-    private unbindDocumentDelegatedHandlers(): void {
-        const delegationRoot = $(document);
-        const ns = this.delegatedEventsNamespace;
-
-        delegationRoot
-            .off("click" + ns, "#audio-next")
-            .off("click" + ns, "#audio-prev")
-            .off("mousedown" + ns + " mouseup" + ns, "#audio-record")
-            .off("click" + ns, "#audio-play")
-            .off("click" + ns, "#audio-split")
-            .off("click" + ns, "#audio-listen")
-            .off("click" + ns, "#audio-clear")
-            .off("click" + ns, "#audio-input-dev");
     }
 
     // The DOM node we last attached media-event handlers to. Used to detect when
@@ -570,12 +461,8 @@ export default class AudioRecording implements IAudioRecorder {
     // Initialization that happens for a new page should happen in newPageReady instead.
     public async setupForRecordingAsync(): Promise<void> {
         this.isShowing = true;
-        this.bindDocumentDelegatedHandlers();
 
         this.updateInputDeviceDisplay();
-        this.disablingOverlay = document.getElementById(
-            "disablingOverlay",
-        ) as HTMLDivElement;
 
         // Add these listeners even if there's currently no editables.
         // It's possible that your page starts with no editables, then you open the Talking Book Tool (and this method runs),
@@ -1954,7 +1841,6 @@ export default class AudioRecording implements IAudioRecorder {
     public changeInputDevice(): void {
         // REVIEW: this may in fact be unneeded but I'm just trying to get eslint set up and conceivably it is intentional
         // eslint-disable-next-line @typescript-eslint/no-this-alias
-        const thisClass = this;
         get("audio/devices", (result) => {
             const data = result.data; // Axios apparently recognizes the JSON and parses it automatically.
             // Retrieves JSON generated by AudioRecording.AudioDevicesJson
@@ -1971,57 +1857,12 @@ export default class AudioRecording implements IAudioRecorder {
                 this.setInputDevice(device);
                 return;
             }
-            /*
-            const devList = $("#audio-devlist");
-            devList.empty();
-            */
             this.uiState.audioDevices = [];
             for (let i = 0; i < data.devices.length; i++) {
                 this.uiState.audioDevices.push(data.devices[i]);
-                /*
-                // convert "Microphone (xxxx)" --> xxxx, where the final ')' is often missing (cut off somewhere upstream)
-                let label = data.devices[i].replace(
-                    /Microphone \(([^\)]*)\)?/,
-                    "$1",
-                );
-                //make what's left safe for html
-                label = $("<div>").text(label).html();
-                // preserve the product name, which is the id we will send back if they choose it
-                const menuItem = devList.append(
-                    '<li data-choice="' + i + '">' + label + "</li>",
-                );
-                */
             }
             this.uiState.shouldShowDeviceMenu = true;
             this.notifyStateChanged();
-            /*
-            (<any>devList)
-                .one(
-                    "click",
-                    function (event) {
-                        devList.hide();
-                        const choice = $(event.target).data("choice");
-                        axios
-                            .post(
-                                "/bloom/api/audio/currentRecordingDevice",
-                                data.devices[choice],
-                                { headers: { "Content-Type": "text/plain" } },
-                            )
-                            .then((result) => {
-                                this.updateInputDeviceDisplay();
-                            })
-                            .catch((error) => {
-                                toastr.error(error.statusText);
-                            });
-                    }.bind(this),
-                )
-                .show()
-                .position({
-                    my: "left top",
-                    at: "left bottom",
-                    of: $("#audio-input-dev"),
-                });
-            */
         });
     }
 
@@ -2077,11 +1918,6 @@ export default class AudioRecording implements IAudioRecorder {
                 this.uiState.inputDevice.title = productName;
             }
             this.notifyStateChanged();
-            /*
-            const devButton = $("#audio-input-dev");
-            devButton.attr("src", imageSrc);
-            devButton.attr("title", productName);
-            */
         });
     }
 
@@ -2161,11 +1997,6 @@ export default class AudioRecording implements IAudioRecorder {
 
     private doesRecordingExistForCurrentSelection(): boolean {
         return this.getStatus("play") === Status.Enabled;
-        /*
-        return document
-            .getElementById("audio-play")!
-            .classList.contains("enabled");
-        */
     }
 
     // Update the input element (checkbox) and turn on the playback order controls on the visible
@@ -2269,7 +2100,8 @@ export default class AudioRecording implements IAudioRecorder {
         }
         this.sortOutTabindexValues();
         this.renderPlaybackControls();
-        this.setDisableEverythingMode(true);
+        this.uiState.inShowPlaybackOrderMode = true;
+        this.notifyStateChanged();
         this.inShowPlaybackOrderMode = true;
     }
 
@@ -2368,7 +2200,8 @@ export default class AudioRecording implements IAudioRecorder {
         Array.from(elementsToRemove).forEach((element) => {
             element.parentElement!.removeChild(element);
         });
-        this.setDisableEverythingMode(false);
+        this.uiState.inShowPlaybackOrderMode = false;
+        this.notifyStateChanged();
         if (!leaveChecked) {
             // If we're staying on the same page, update the display to show the highlighted
             // audio element.  If we're leaving the page, don't try to update the display.
@@ -2399,18 +2232,6 @@ export default class AudioRecording implements IAudioRecorder {
             }
         }
         return result;
-    }
-
-    private setDisableEverythingMode(doDisable: boolean) {
-        if (!this.disablingOverlay) {
-            return; // should have been setup by now
-        }
-        const hiddenClass = "hiddenOverlay";
-        if (doDisable) {
-            this.disablingOverlay.classList.remove(hiddenClass);
-        } else {
-            this.disablingOverlay.classList.add(hiddenClass);
-        }
     }
 
     // With css, the presence/absence of the checked class on the checkbox label determines its color.
@@ -2500,19 +2321,6 @@ export default class AudioRecording implements IAudioRecorder {
         }
         this.previousRecordMode = this.recordingMode;
         return result;
-    }
-
-    public updateSplitButton(): void {
-        const element = document.getElementById("audio-split-wrapper");
-        if (element) {
-            if (this.recordingMode == RecordingMode.TextBox) {
-                element.classList.remove("hide-countable"); // When we make this button visible we have to adjust classes so that it starts to participate in the CSS that numbers the steps
-                element.classList.add("talking-book-counter");
-            } else {
-                element.classList.add("hide-countable");
-                element.classList.remove("talking-book-counter");
-            }
-        }
     }
 
     public persistRecordingMode(
@@ -2961,7 +2769,6 @@ export default class AudioRecording implements IAudioRecorder {
     // Should be called when whatever tool uses this is about to be hidden (e.g., changing tools or closing toolbox)
     public handleToolHiding() {
         this.isShowing = false;
-        this.unbindDocumentDelegatedHandlers();
         this.wiredPlayer = null;
         // This ensures that no in-progress playback gets resumed by a timeout or end-play handler
         // after the tool closes.
@@ -4050,32 +3857,10 @@ export default class AudioRecording implements IAudioRecorder {
             this.uiState.buttons[verb] === Status.Enabled ||
             this.uiState.buttons[verb] === Status.Expected
         );
-        /*
-        return (
-            $("#audio-" + verb).hasClass("enabled") ||
-            $("#audio-" + verb).hasClass("expected")
-        );
-        */
     }
 
     private getStatus(which: string): Status {
         return this.uiState.buttons[which];
-        /*
-        const buttonElement = document.getElementById(`audio-${which}`);
-        if (!buttonElement) {
-            return Status.Disabled;
-        }
-
-        if (buttonElement.classList.contains("enabled")) {
-            return Status.Enabled;
-        } else if (buttonElement.classList.contains("expected")) {
-            return Status.Expected;
-        } else if (buttonElement.classList.contains("active")) {
-            return Status.Active;
-        } else {
-            return Status.Disabled;
-        }
-        */
     }
 
     private setStatus(which: string, to: Status): void {
@@ -4084,80 +3869,8 @@ export default class AudioRecording implements IAudioRecorder {
             // Doesn't make sense to expect something while something else is active.
             this.removeExpectedStatusFromAll();
         }
-        /*
-        const buttonElement = document.getElementById(`audio-${which}`);
-        if (buttonElement) {
-            buttonElement.classList.remove("expected");
-            buttonElement.classList.remove("disabled");
-            buttonElement.classList.remove("disabledUnlessHover");
-            buttonElement.classList.remove("enabled");
-            buttonElement.classList.remove("active");
-
-            // Convert names from PascalCase to camelCase.
-            // The enum uses PascalCase, but the CSS uses camelCase
-            const statusString: string = Status[to];
-            const className: string =
-                AudioRecording.ToCamelCaseFromPascalCase(statusString);
-            buttonElement.classList.add(className);
-        }
-
-        const labelElement = document.getElementById(`audio-${which}-label`);
-        if (labelElement) {
-            if (to === Status.Expected) {
-                labelElement.classList.add("expected");
-            } else {
-                labelElement.classList.remove("expected");
-            }
-        }
-
-        // Also set expected on the list item, which provides the number e.g. "1)" or "2)" or "3)".
-        // This provides the yellow highlight color on that part of the text too
-        const listItemElement = document.getElementById(
-            `audio-${which}-list-item`,
-        ); // Note: It is very much a normal case that this may return null for some inputs.
-        if (listItemElement) {
-            if (to === Status.Expected) {
-                listItemElement.classList.add("expected");
-            } else {
-                listItemElement.classList.remove("expected");
-            }
-        }
-
-        if (to === Status.Active) {
-            // Doesn't make sense to expect something while something else is active.
-            this.removeExpectedStatusFromAll();
-            if (which === "play") {
-                // We need a different label.
-                const label = document.getElementById("audio-play-label")!;
-                if (!this.originalPlayLabel) {
-                    this.originalPlayLabel = label.innerText;
-                }
-                label.classList.add("hide-counter-still-count");
-                theOneLocalizationManager
-                    .asyncGetText("Common.Pause", "Pause", "")
-                    .done((pause) => {
-                        label.innerText = pause;
-                    });
-            }
-        } else {
-            if (this.originalPlayLabel) {
-                // we've been in the playing active state at some point, make sure we no longer are.
-                // Note: we could clear originalPlayLabel here, which would save us executing this
-                // block more than we really need to. However, there's a lot of async stuff
-                // happening in this class. The very first time we hit play, we can be entirely
-                // confident of capturing the original (localized) label. If we start clearing
-                // the variable, I'm concerned that there may be some small chance that at some
-                // point we will capture "Pause" and then we will be stuck there.
-                const label = document.getElementById("audio-play-label")!;
-                label.innerText = this.originalPlayLabel;
-                label.classList.remove("hide-counter-still-count");
-            }
-        }
-        */
         this.notifyStateChanged();
     }
-
-    private originalPlayLabel: string;
 
     // Review: Where is the best place to put this function?
     public static ToCamelCaseFromPascalCase(text: string) {
@@ -4171,21 +3884,6 @@ export default class AudioRecording implements IAudioRecorder {
             if (this.getStatus(buttonName) === Status.Expected) {
                 this.setStatus(buttonName, Status.Enabled);
             }
-            /*
-            const buttonElement = document.getElementById(
-                `audio-${buttonName}`,
-            );
-            if (buttonElement) {
-                buttonElement.classList.remove("expected");
-            }
-
-            const labelElement = document.getElementById(
-                `audio-${buttonName}-label`,
-            );
-            if (labelElement) {
-                labelElement.classList.remove("expected");
-            }
-            */
         }
     }
 
@@ -4205,11 +3903,7 @@ export default class AudioRecording implements IAudioRecorder {
     ): Promise<string | undefined> => {
         // First, check if there's even an audio recorded yet. (Not sure if we could ever get called in this
         // situation; I think the adjust timings dialog couldn't even be launched.)
-        const playButtonElement = document.getElementById("audio-play");
-        if (
-            playButtonElement &&
-            playButtonElement.classList.contains("disabled")
-        ) {
+        if (this.getStatus("play") === Status.Disabled) {
             this.displaySplitError();
             this.setStatus("split", Status.Disabled); // Remove active/expected highlights
             return undefined;
@@ -4661,17 +4355,6 @@ export default class AudioRecording implements IAudioRecorder {
     }
 
     private updateDisplay(maySetHighlight = true): void {
-        this.updateSplitButton();
-
-        /*
-        const container = document.getElementById(
-            "advanced-talking-book-controls-react-container",
-        );
-        if (!container) {
-            // Won't exist for unit tests
-            return;
-        }
-        */
         // It's a bit expensive to do the test for text present, but without it,
         // Import Recording will be improperly enabled on an empty page.
         const hasRecordableDivs =
@@ -4700,40 +4383,6 @@ export default class AudioRecording implements IAudioRecorder {
         this.uiState.showingImageDescriptions = this.showingImageDescriptions;
         this.uiState.recordingMode = this.recordingMode;
         this.notifyStateChanged();
-        /*
-        renderRoot(
-            React.createElement(TalkingBookAdvancedSection, {
-                recordingMode: this.recordingMode,
-                haveACurrentTextboxModeRecording:
-                    haveACurrentTextboxModeRecording,
-                setRecordingMode: async (recordingMode: RecordingMode) => {
-                    this.setRecordingModeAsync(recordingMode);
-                    this.updateDisplay();
-                },
-                //hasAudio: this.getStatus("clear") === Status.Enabled, // plausibly, we could instead require that we have *all* the audio
-                hasAudio: this.haveAudio,
-                hasRecordableDivs: hasRecordableDivs,
-                handleImportRecordingClick: () =>
-                    this.handleImportRecordingClick(),
-                insertSegmentMarker: () => {
-                    const selection =
-                        this.getPageFrame()!.contentWindow!.getSelection();
-                    const range = selection!.getRangeAt(0);
-                    const marker = document.createTextNode("|");
-                    range.insertNode(marker);
-                },
-                inShowPlaybackOrderMode: this.inShowPlaybackOrderMode,
-                setShowPlaybackOrder: async (isOn: boolean) => {
-                    await this.setShowPlaybackOrderMode(isOn);
-                },
-                showingImageDescriptions: this.showingImageDescriptions,
-                setShowingImageDescriptions: (isOn: boolean) => {
-                    this.setShowingImageDescriptions(isOn);
-                },
-            }),
-            container,
-        );
-        */
     }
 
     private editTimingsFileAsync = async (timingsFilePath?: string) => {

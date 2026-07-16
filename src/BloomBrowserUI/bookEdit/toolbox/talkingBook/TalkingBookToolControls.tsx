@@ -20,12 +20,14 @@ import { BloomTooltip } from "../../../react_components/BloomToolTip";
 import { Menu } from "@mui/material";
 import { LocalizableMenuItem } from "../../../react_components/localizableMenuItem";
 import { useMountEffect } from "../../../utils/useMountEffect";
+import { useWatchApiData } from "../../../utils/bloomApi";
 
 const RecordingMeterAndText: FunctionComponent<{
     inputDevice: { iconSrc: string; title: string } | undefined;
     shouldDisplay: boolean;
     audioDevices: string[];
     audioRecorder: IAudioRecorder;
+    uiLanguage: string;
 }> = (props) => {
     const meterCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -44,7 +46,7 @@ const RecordingMeterAndText: FunctionComponent<{
                     color: ${kBloomBuff};
                 `}
             >
-                <span>{"1) "}</span>
+                <span>{`${new Intl.NumberFormat(props.uiLanguage).format(1)}) `}</span>
                 <Span l10nKey="EditTab.Toolbox.TalkingBookTool.CheckSettingsLabel">
                     Check that you are recording into the correct device and
                     that these levels are showing blue:
@@ -145,6 +147,7 @@ const TalkingBookButton: FunctionComponent<{
     size: number;
     dontMoveRight?: boolean;
     stepNum?: number;
+    uiLanguage?: string;
     hideStepNum?: boolean;
     l10nKey: string;
     l10nText: string;
@@ -161,6 +164,7 @@ const TalkingBookButton: FunctionComponent<{
         size,
         dontMoveRight,
         stepNum,
+        uiLanguage,
         hideStepNum,
         l10nKey,
         l10nText,
@@ -224,7 +228,9 @@ const TalkingBookButton: FunctionComponent<{
                         : kBloomBuff};
                 `}
             >
-                {!hideStepNum && stepNum && <span>{`${stepNum}) `}</span>}
+                {!hideStepNum && stepNum && uiLanguage && (
+                    <span>{`${new Intl.NumberFormat(uiLanguage).format(stepNum)}) `}</span>
+                )}
                 <Span l10nKey={l10nKey}>{l10nText}</Span>
             </div>
         </div>
@@ -234,6 +240,12 @@ const TalkingBookButton: FunctionComponent<{
 export const TalkingBookToolControls: FunctionComponent<{
     audioRecorder: IAudioRecorder;
 }> = (props) => {
+    const uiLanguage = useWatchApiData(
+        "currentUiLanguage",
+        "en",
+        "app",
+        "uiLanguageChanged",
+    );
     const [uiState, setUiState] = useState<TalkingBookUiState>(
         props.audioRecorder.uiState,
     );
@@ -272,13 +284,14 @@ export const TalkingBookToolControls: FunctionComponent<{
                     shouldDisplay={uiState.shouldShowDeviceMenu}
                     audioDevices={uiState.audioDevices}
                     audioRecorder={props.audioRecorder}
+                    uiLanguage={uiLanguage}
                 />
                 <div
                     css={css`
                         color: ${kBloomBuff};
                     `}
                 >
-                    <span>{"2) "}</span>
+                    <span>{`${new Intl.NumberFormat(uiLanguage).format(2)}) `}</span>
                     <Span l10nKey="EditTab.Toolbox.TalkingBookTool.LookAtSentenceLabel">
                         Look at the highlighted text
                     </Span>
@@ -291,6 +304,7 @@ export const TalkingBookToolControls: FunctionComponent<{
                     activeImgFile="/bloom/bookEdit/toolbox/talkingBook/record_active.svg"
                     size={40}
                     stepNum={3}
+                    uiLanguage={uiLanguage}
                     l10nKey="EditTab.Toolbox.TalkingBookTool.SpeakLabel"
                     l10nText="Speak"
                     onMouseDown={() => {
@@ -308,6 +322,7 @@ export const TalkingBookToolControls: FunctionComponent<{
                     activeImgFile="/bloom/bookEdit/toolbox/talkingBook/pause_yellow.svg"
                     size={45}
                     stepNum={4}
+                    uiLanguage={uiLanguage}
                     hideStepNum={uiState.buttons.play === Status.Active}
                     l10nKey={
                         uiState.buttons.play === Status.Active
@@ -336,6 +351,7 @@ export const TalkingBookToolControls: FunctionComponent<{
                         size={45}
                         dontMoveRight
                         stepNum={5}
+                        uiLanguage={uiLanguage}
                         l10nKey="EditTab.Toolbox.TalkingBookTool.AdjustTimings"
                         l10nText="Adjust Timings..."
                         onClick={() => {
@@ -352,6 +368,7 @@ export const TalkingBookToolControls: FunctionComponent<{
                     stepNum={
                         uiState.recordingMode === RecordingMode.TextBox ? 6 : 5
                     }
+                    uiLanguage={uiLanguage}
                     l10nKey="EditTab.Toolbox.TalkingBookTool.NextLabel"
                     l10nText="Next"
                     onClick={() => {

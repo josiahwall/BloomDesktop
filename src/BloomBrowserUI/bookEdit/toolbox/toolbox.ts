@@ -602,6 +602,12 @@ export class ToolBox {
         });
     }
 
+    // a function to update the state of the checkboxes in the toolbox settings,
+    // whenever a tool is enabled and activated using activateToolFromId(). This
+    // fnction starts out unimplemented, but is later implemented by SettingsToolControls.tsx
+    // when it gets mounted.
+    public changeToolboxSettingsState?: (which: string, value: boolean) => void;
+
     public activateToolFromId(toolId: string) {
         if (!getITool(toolId)) {
             // Normally we won't even give a way to see this tool if it's
@@ -638,6 +644,9 @@ export class ToolBox {
                 // Genuinely disabled: enable it, which persists the state and updates
                 // enabledToolIds, then activates it (showOrHideTool opens it by default).
                 setToolEnabledFromSettings(toolId, true);
+                if (this.changeToolboxSettingsState !== undefined) {
+                    this.changeToolboxSettingsState(toolId, true);
+                }
             }
         }
     }

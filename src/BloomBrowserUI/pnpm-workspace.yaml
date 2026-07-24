@@ -12,6 +12,8 @@ minimumReleaseAgeExclude:
     - bloom-player
     - comicaljs
     - "@ethnolib/language-chooser-react-mui"
+    - "@ethnolib/find-language@0.4.0"
+    - "@ethnolib/language-chooser-react-hook@0.3.3"
 savePrefix: ""
 
 # Formerly the yarn "resolutions" block: force a single @types/react across the

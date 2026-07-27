@@ -3,6 +3,7 @@ import tinycolor from "tinycolor2";
 // Corresponds to the colors defined in bloomUI.less
 // These can be useful for CSS-in-JS, where it's hard to get at the color definitions in the .less files
 export const kBloomBlue = "#1d94a4"; // See @bloom-blue
+export const kBloomGreenTeal = "#1b9e9a";
 export const kBloomLightBlue = "#b0dee4"; // See @bloom-lightblue
 export const kBloomYellow = "#FEBF00"; // See @bloom-yellow
 

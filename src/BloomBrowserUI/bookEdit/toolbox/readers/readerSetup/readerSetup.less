@@ -567,3 +567,260 @@ table.hide-fourth-column {
         height: 100%;
     }
 }
+
+// These rules apply only while the decodable setup is hosted in the React BloomDialog.
+// They provide a visual bridge while its tabs are converted from the legacy UI.
+body.react-hosted-decodable-reader-setup {
+    background: #f4f5f5;
+    color: #202020;
+    font-family: "Segoe UI", sans-serif;
+
+    #dlstabs {
+        background: #f4f5f5;
+        border: 0;
+    }
+
+    #dlstabs > ul {
+        display: flex;
+        align-items: stretch;
+        height: 48px;
+        margin: 0;
+        padding: 0 18px;
+        background: white;
+        border: 0;
+        border-bottom: 1px solid #e5e5e5;
+        border-radius: 0;
+    }
+
+    #dlstabs > ul li {
+        float: none;
+        margin: 0 10px 0 0;
+        padding: 0;
+        background: transparent;
+        border: 0;
+    }
+
+    #dlstabs > ul li a {
+        display: flex;
+        align-items: center;
+        height: 48px;
+        padding: 0 10px;
+        color: #5d6470;
+        font-size: 10pt;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    #dlstabs > ul li.ui-tabs-active {
+        border-bottom: 2px solid @bloom-blue;
+    }
+
+    #dlstabs > ul li.ui-tabs-active a {
+        color: @bloom-blue;
+    }
+
+    .reader-setup-tab {
+        height: ~"calc(100% - 48px)";
+        padding: 20px 24px;
+        box-sizing: border-box;
+        background: #f4f5f5;
+    }
+
+    #dlstabs-2 > div:first-child {
+        display: none;
+    }
+
+    #dlstabs-2 {
+        display: flex;
+        gap: 0;
+        overflow: hidden;
+    }
+
+    #stage-list-container,
+    #stage-detail {
+        float: none;
+        min-height: 0;
+        height: 100%;
+        margin: 0;
+        background: white;
+        border: 1px solid #dddddd;
+        border-radius: 8px;
+        box-sizing: border-box;
+        box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+    }
+
+    #stage-list-container {
+        display: flex;
+        flex-direction: column;
+        width: 34%;
+        min-width: 245px;
+        border-radius: 8px 0 0 8px;
+    }
+
+    #stage-detail {
+        width: 66%;
+        border-left: 0;
+        border-radius: 0 8px 8px 0;
+    }
+
+    #stage-list {
+        flex: 1 1 auto;
+        height: auto;
+        border: 0;
+    }
+
+    #stage-list-container > div:not(#stage-list) {
+        padding: 10px 14px;
+        color: #76808d;
+    }
+
+    #stage-list-container > div:last-child {
+        margin-left: auto;
+    }
+
+    #stage-list-container a,
+    #stage-detail a {
+        color: @bloom-blue;
+    }
+
+    #stage-list .scrolling-table-header {
+        height: 34px;
+        background: #fafafa;
+        border-bottom: 1px solid #e5e5e5;
+    }
+
+    #stage-list .scrolling-table-container {
+        padding-top: 34px;
+    }
+
+    #stage-list .scrolling-table-container-inner table th div {
+        top: 4px;
+        color: #8a929c;
+        font-size: 8pt;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        line-height: 26px;
+        text-transform: uppercase;
+    }
+
+    #stage-list .scrolling-table-container-inner table tr:nth-child(even),
+    #stage-list .scrolling-table-container-inner table .first-row {
+        background: white;
+    }
+
+    #stage-list .scrolling-table-container-inner table td {
+        height: 42px;
+        border-bottom: 1px solid #eeeeee;
+    }
+
+    #stage-list .scrolling-table-container-inner table tr.selected {
+        background-color: #e4f3f4 !important;
+    }
+
+    #stage-list .scrolling-table-container-inner table tfoot td {
+        height: 42px;
+    }
+
+    #stage-detail > div:first-child {
+        display: flex !important;
+        align-items: center;
+        height: 56px;
+        margin: 0 !important;
+        padding: 0 22px;
+        border-bottom: 1px solid #e5e5e5;
+    }
+
+    #stage-detail > div:first-child span {
+        font-size: 14pt;
+        font-weight: 600;
+    }
+
+    #stage-detail > div:first-child span:first-child::before {
+        content: "";
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        margin-right: 10px;
+        border-radius: 50%;
+        background: @bloom-blue;
+    }
+
+    #stage-detail #setup-stage-letters-and-words {
+        width: 59% !important;
+        margin: 20px 0 0 22px;
+    }
+
+    #stage-detail #setup-stage-matching-words {
+        width: ~"calc(41% - 22px)" !important;
+        height: ~"calc(100% - 56px)";
+        margin: 0;
+        padding: 22px 20px;
+        border-left: 1px solid #e5e5e5;
+        box-sizing: border-box;
+    }
+
+    #stage-detail #setup-stage-matching-words > div {
+        height: 100% !important;
+    }
+
+    #setup-stage-sight-words {
+        border: 1px solid #d8dce0;
+        border-radius: 6px;
+        padding: 8px;
+        font-size: 10pt;
+    }
+
+    #setup-selected-letters {
+        margin-top: 10px;
+    }
+
+    div.rs-letters {
+        width: 44px;
+        height: 44px;
+        margin: 0 8px 8px 0;
+        padding: 10px 0;
+        border: 1px solid #e2e5e7;
+        border-radius: 6px;
+        box-sizing: border-box;
+        font-size: 12pt;
+    }
+
+    div.unselected-letter {
+        color: #b7bec5;
+    }
+
+    div.previous-letter {
+        border: 2px solid @bloom-blue;
+        padding-top: 9px;
+        color: #197786;
+    }
+
+    div.current-letter {
+        border-color: @bloom-blue;
+        background-color: @bloom-blue;
+        color: white;
+    }
+
+    div.rs-letter-container-s,
+    div.rs-letter-container-l {
+        max-width: none;
+        height: auto;
+        border: 0;
+        overflow: visible;
+    }
+
+    div.rs-word-container {
+        margin-top: 10px;
+        border: 0;
+        background: white;
+    }
+
+    #rs-matching-words span {
+        display: inline-block;
+        margin: 0 6px 6px 0;
+        padding: 5px 10px;
+        border-radius: 16px;
+        background: #f1f3f4;
+        color: #24506a;
+    }
+}

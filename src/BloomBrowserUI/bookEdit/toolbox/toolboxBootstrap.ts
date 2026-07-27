@@ -33,6 +33,12 @@ import { theOneAudioRecorder } from "./talkingBook/audioRecording";
 import { renderToolboxRoot } from "./ToolboxRoot";
 
 export interface IToolboxFrameExports {
+    beginSaveChangedSettings(
+        settings: import("./readers/ReaderSettings").ReaderSettings,
+        previousMoreWords: string,
+        previousLetters: string,
+    ): Promise<void>;
+
     addWordListChangedListener(
         listenerNameAndContext: string,
         callback: () => void,

@@ -37,5 +37,11 @@ import "./readerSetup.ui";
 
 //was $(function() {$("#dlstabs").tabs();});
 $(document).ready(() => {
+    if (
+        new URLSearchParams(window.location.search).get("reactHost") ===
+        "decodable"
+    ) {
+        document.body.classList.add("react-hosted-decodable-reader-setup");
+    }
     $("#dlstabs").tabs();
 });

@@ -22,7 +22,7 @@ import {
 import { useL10n } from "../../../../react_components/l10nHooks";
 import type { ReaderSettings } from "../ReaderSettings";
 import { DecodableStagesSetup } from "./DecodableStagesSetup";
-import { kBloomGreenTeal } from "../../../../utils/colorUtils";
+import { kBloomBlue } from "../../../../utils/colorUtils";
 import { lightTheme } from "../../../../bloomMaterialUITheme";
 
 let closeDialog: () => void = () => {};
@@ -83,11 +83,11 @@ const DecodableReaderSetupDialogLauncher: React.FunctionComponent<{
                         box-shadow: 0 12px 32px rgb(0 0 0 / 24%);
                     }
                     .MuiButton-containedPrimary {
-                        background-color: ${kBloomGreenTeal};
+                        background-color: ${kBloomBlue};
                     }
                     .MuiButton-outlinedPrimary {
-                        border-color: ${kBloomGreenTeal};
-                        color: ${kBloomGreenTeal};
+                        border-color: ${kBloomBlue};
+                        color: ${kBloomBlue};
                     }
                 `}
             >

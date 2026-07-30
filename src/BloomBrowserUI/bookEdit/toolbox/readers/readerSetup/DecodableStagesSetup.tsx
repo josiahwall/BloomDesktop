@@ -1,20 +1,83 @@
 import { css } from "@emotion/react";
-import { Chip, Tab, Tabs } from "@mui/material";
-import $ from "jquery";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
+import { Chip, IconButton, RadioGroup, Tab, Tabs } from "@mui/material";
+import axios from "axios";
 import * as React from "react";
-import { useCallback, useState } from "react";
+import { useEffect, useState } from "react";
 import { getToolboxBundleExports } from "../../../js/workspaceFrames";
-import { get } from "../../../../utils/bloomApi";
+import {
+    get,
+    getBloomApiPrefix,
+    getWithConfigAsync,
+    post,
+} from "../../../../utils/bloomApi";
 import { useMountEffect } from "../../../../utils/useMountEffect";
 import { useL10n } from "../../../../react_components/l10nHooks";
 import { Div, Span } from "../../../../react_components/l10nComponents";
+import BloomButton from "../../../../react_components/bloomButton";
 import { ReaderSettings, ReaderStage } from "../ReaderSettings";
 import { kBloomBlue } from "../../../../utils/colorUtils";
 import { ReaderDialogPhaseSection } from "./ReaderDialogPhaseSection";
 import { cleanSightWords, cloneReaderSettings } from "./decodableStagesUtils";
+import { theOneLanguageDataInstance } from "../libSynphony/synphony_lib";
 
 const kMutedText = "#707477";
+const kSampleTextFileExtensions = ["txt", "js", "json"];
 import { Link } from "../../../../react_components/link";
+import { MuiRadio } from "../../../../react_components/muiRadio";
+import { BloomTooltip } from "../../../../react_components/BloomToolTip";
+import { ReaderDialogTextarea } from "./ReaderDialogTextarea";
+
+/** Splits a word into the configured graphemes, following Synphony's legacy algorithm. */
+const getGpcForm = (word: string, allGpcs: string[]): string[] => {
+    const sortedGpcs = Array.from(
+        new Set(allGpcs.map((gpc) => gpc.toLowerCase()).filter(Boolean)),
+    ).sort((firstGpc, secondGpc) => secondGpc.length - firstGpc.length);
+    const gpcForm: string[] = [];
+    let remainingWord = word.toLowerCase();
+
+    while (remainingWord.length > 0) {
+        const matchingGpc = sortedGpcs.find((gpc) =>
+            remainingWord.endsWith(gpc),
+        );
+        if (matchingGpc) {
+            gpcForm.unshift(matchingGpc);
+            remainingWord = remainingWord.slice(0, -matchingGpc.length);
+            continue;
+        }
+
+        const lastCharacter = remainingWord.charAt(remainingWord.length - 1);
+        const lastCharacterCode = lastCharacter.charCodeAt(0);
+        const characterLength =
+            0xd800 <= lastCharacterCode && lastCharacterCode <= 0xdfff ? 2 : 1;
+        gpcForm.unshift(remainingWord.slice(-characterLength));
+        remainingWord = remainingWord.slice(0, -characterLength);
+    }
+
+    return gpcForm;
+};
+
+/** Returns whether a word contains only taught or language-defined allowed graphemes. */
+const hasOnlyKnownGraphemes = (
+    word: string,
+    allGpcs: string[],
+    knownGpcs: string[],
+): boolean => {
+    const allowedGpcs = new Set(knownGpcs.map((gpc) => gpc.toLowerCase()));
+    for (const value of [
+        theOneLanguageDataInstance["AlwaysMatch"],
+        theOneLanguageDataInstance["SyllableBreak"],
+        theOneLanguageDataInstance["StressSymbol"],
+        theOneLanguageDataInstance["MorphemeBreak"],
+    ]) {
+        if (typeof value === "string" && value !== "") {
+            allowedGpcs.add(value);
+        }
+    }
+
+    return getGpcForm(word, allGpcs).every((gpc) => allowedGpcs.has(gpc));
+};
 
 export const DecodableStagesSetup: React.FunctionComponent<{
     onSettingsLoaded: (settings: ReaderSettings) => void;
@@ -23,6 +86,7 @@ export const DecodableStagesSetup: React.FunctionComponent<{
     const [fontName, setFontName] = useState("");
     const [stageIds, setStageIds] = useState<string[]>([]);
     const [curTab, setCurTab] = useState<number>(2);
+    const [selectedStageIndex, setSelectedStageIndex] = useState(0);
     const nextStageId = React.useRef(0);
 
     const lettersTab = useL10n("Letters", "ReaderSetup.Letters");
@@ -117,19 +181,25 @@ export const DecodableStagesSetup: React.FunctionComponent<{
                         fontName={fontName}
                         onSettingsLoaded={props.onSettingsLoaded}
                     />
+                ) : curTab === 1 ? (
+                    <SampleWordsTab
+                        settings={settings}
+                        setSettings={setSettings}
+                        onSettingsLoaded={props.onSettingsLoaded}
+                    />
                 ) : (
-                    curTab === 2 && (
-                        <StagesTab
-                            settings={settings}
-                            setSettings={setSettings}
-                            stageIds={stageIds}
-                            nextStageId={nextStageId}
-                            setStageIds={setStageIds}
-                            setCurTab={setCurTab}
-                            fontName={fontName}
-                            onSettingsLoaded={props.onSettingsLoaded}
-                        />
-                    )
+                    <StagesTab
+                        settings={settings}
+                        setSettings={setSettings}
+                        stageIds={stageIds}
+                        nextStageId={nextStageId}
+                        setStageIds={setStageIds}
+                        setCurTab={setCurTab}
+                        fontName={fontName}
+                        onSettingsLoaded={props.onSettingsLoaded}
+                        curStageIndex={selectedStageIndex}
+                        setCurStageIndex={setSelectedStageIndex}
+                    />
                 )}
             </div>
         </div>
@@ -142,9 +212,9 @@ const LettersTab: React.FunctionComponent<{
     fontName: string;
     onSettingsLoaded: (settings: ReaderSettings) => void;
 }> = (props) => {
-    const updateLetters = (change: (settings: ReaderSettings) => void) => {
+    const updateLetters = (value: string) => {
         const updatedSettings = cloneReaderSettings(props.settings);
-        change(updatedSettings);
+        updatedSettings.letters = value;
         props.setSettings(updatedSettings);
         props.onSettingsLoaded(updatedSettings);
     };
@@ -170,14 +240,9 @@ const LettersTab: React.FunctionComponent<{
             >
                 Letters and Letter Combinations
             </Div>
-            <textarea
-                aria-label="Letters and Letter Combinations"
+            <ReaderDialogTextarea
+                updateSettings={updateLetters}
                 value={props.settings.letters}
-                onChange={(event) =>
-                    updateLetters((settings) => {
-                        settings.letters = event.target.value;
-                    })
-                }
                 css={css`
                     display: block;
                     width: 325px;
@@ -276,6 +341,275 @@ const LettersTab: React.FunctionComponent<{
     );
 };
 
+const SampleWordsTab: React.FunctionComponent<{
+    settings: ReaderSettings;
+    setSettings: (value: ReaderSettings) => void;
+    onSettingsLoaded: (settings: ReaderSettings) => void;
+}> = (props) => {
+    const [sampleTextFiles, setSampleTextFiles] = useState<string[]>([]);
+
+    useMountEffect(() => {
+        let isMounted = true;
+        const listenerName = "sampleTextFiles.DecodableReaderSetup";
+        const toolbox = getToolboxBundleExports();
+        if (!toolbox) {
+            throw new Error(
+                "The Reader toolbox must be loaded before its setup dialog.",
+            );
+        }
+
+        const refreshSampleTextFiles = () => {
+            get("readers/ui/sampleTextsList", (result) => {
+                if (isMounted) {
+                    setSampleTextFiles(
+                        result.data
+                            .split("\r")
+                            .filter((path) => path)
+                            .filter((path) => {
+                                const extension = path.split(".").pop();
+                                return (
+                                    extension !== undefined &&
+                                    kSampleTextFileExtensions.includes(
+                                        extension,
+                                    )
+                                );
+                            }),
+                    );
+                }
+            });
+        };
+
+        // This subscription synchronizes React state with Bloom's non-React Sample Texts folder watcher.
+        refreshSampleTextFiles();
+        toolbox.addSampleTextFilesChangedListener(
+            listenerName,
+            refreshSampleTextFiles,
+        );
+        window.addEventListener("focus", refreshSampleTextFiles);
+
+        return () => {
+            isMounted = false;
+            toolbox.removeSampleTextFilesChangedListener(listenerName);
+            window.removeEventListener("focus", refreshSampleTextFiles);
+        };
+    });
+
+    const updateMoreWords = (value: string) => {
+        const updatedSettings = cloneReaderSettings(props.settings);
+        updatedSettings.moreWords = value;
+        props.setSettings(updatedSettings);
+        props.onSettingsLoaded(updatedSettings);
+    };
+
+    return (
+        <div
+            css={css`
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                min-height: 0;
+            `}
+        >
+            <div
+                css={css`
+                    padding: 20px 24px 18px;
+                `}
+            >
+                <RadioGroup
+                    value={
+                        props.settings.useAllowedWords === 0
+                            ? "stages"
+                            : "allowedWords"
+                    }
+                    onChange={(event) => {
+                        const updatedSettings = cloneReaderSettings(
+                            props.settings,
+                        );
+                        updatedSettings.useAllowedWords =
+                            event.target.value === "stages" ? 0 : 1;
+                        props.setSettings(updatedSettings);
+                        props.onSettingsLoaded(updatedSettings);
+                    }}
+                    css={css`
+                        margin-bottom: 16px;
+                        gap: 0;
+                        .MuiFormControlLabel-label {
+                            color: ${kMutedText};
+                            font-size: 9pt;
+                            line-height: 1.4;
+                        }
+                    `}
+                >
+                    <MuiRadio
+                        value="allowedWords"
+                        label="We are using lists of allowed words to define stages"
+                        l10nKey="ReaderSetup.Words.UseAllowedWords"
+                    />
+                    <MuiRadio
+                        value="stages"
+                        label="We are using letters with sight words to define stages"
+                        l10nKey="ReaderSetup.Words.UseLetters"
+                    />
+                </RadioGroup>
+                {props.settings.useAllowedWords === 0 && (
+                    <Div
+                        l10nKey="ReaderSetup.Words.Intro"
+                        css={css`
+                            color: ${kMutedText};
+                            font-size: 9pt;
+                            line-height: 1.4;
+                        `}
+                    >
+                        To help you make decodable readers, Bloom can suggest
+                        words that fit within the current stage. There are two
+                        ways to give words to Bloom:
+                    </Div>
+                )}
+            </div>
+            {props.settings.useAllowedWords === 0 && (
+                <div
+                    css={css`
+                        display: grid;
+                        grid-template-columns: minmax(300px, 40%) minmax(0, 1fr);
+                        flex: 1 1 auto;
+                        min-height: 0;
+                        border-top: 1px solid #e2e4e6;
+                    `}
+                >
+                    <div
+                        css={css`
+                            display: flex;
+                            flex-direction: column;
+                            min-width: 0;
+                            min-height: 0;
+                            padding: 22px 24px;
+                            border-right: 1px solid #e2e4e6;
+                        `}
+                    >
+                        <Div
+                            l10nKey="ReaderSetup.Words.TypeWordsHere"
+                            css={css`
+                                margin-bottom: 8px;
+                                color: ${kMutedText};
+                                font-size: 8pt;
+                                font-weight: 700;
+                                letter-spacing: 0.03em;
+                                text-transform: uppercase;
+                            `}
+                        >
+                            1) Type Words Here
+                        </Div>
+                        <ReaderDialogTextarea
+                            updateSettings={updateMoreWords}
+                            value={props.settings.moreWords}
+                            css={css`
+                                flex: 1 1 auto;
+                                min-height: 100px;
+                                width: 100%;
+                                box-sizing: border-box;
+                                resize: none;
+                                border: 1px solid #d8dce0;
+                                border-radius: 6px;
+                                padding: 10px;
+                                color: #202020;
+                                font-size: 10pt;
+                                line-height: 1.5;
+                                &:focus {
+                                    outline: none;
+                                    border: 2px solid ${kBloomBlue};
+                                    padding: 9px;
+                                }
+                            `}
+                        />
+                    </div>
+                    <div
+                        css={css`
+                            display: flex;
+                            flex-direction: column;
+                            min-width: 0;
+                            min-height: 0;
+                            padding: 22px 24px;
+                        `}
+                    >
+                        <div
+                            css={css`
+                                margin-bottom: 8px;
+                                color: ${kMutedText};
+                                font-size: 8pt;
+                                font-weight: 700;
+                                letter-spacing: 0.03em;
+                                text-transform: uppercase;
+                            `}
+                        >
+                            <Span l10nKey="ReaderSetup.Words.PlaceTextFiles">
+                                2) Place Text Files in Your
+                            </Span>{" "}
+                            <Link
+                                l10nKey="ReaderSetup.Words.SampleTextFolder"
+                                onClick={() =>
+                                    post("readers/ui/openTextsFolder")
+                                }
+                                css={css`
+                                    font-size: inherit;
+                                    font-weight: inherit;
+                                `}
+                            >
+                                Sample Texts Folder
+                            </Link>
+                        </div>
+                        <div
+                            css={css`
+                                flex: 1 1 auto;
+                                min-height: 0;
+                                border: 1px solid #d8dce0;
+                                border-radius: 6px;
+                                background: #fbfbfb;
+                                overflow: auto;
+                                color: ${kMutedText};
+                                font-size: 9pt;
+                                line-height: 1.5;
+                            `}
+                        >
+                            {sampleTextFiles.map((path) => (
+                                <div
+                                    key={path}
+                                    css={css`
+                                        display: flex;
+                                        align-items: center;
+                                        min-width: 0;
+                                        min-height: 40px;
+                                        padding: 0 12px;
+                                        border-bottom: 1px solid #e2e4e6;
+                                    `}
+                                >
+                                    <InsertDriveFileOutlinedIcon
+                                        aria-hidden="true"
+                                        css={css`
+                                            flex: none;
+                                            margin-right: 10px;
+                                            color: #8a949d;
+                                            font-size: 19px;
+                                        `}
+                                    />
+                                    <div
+                                        css={css`
+                                            overflow: hidden;
+                                            text-overflow: ellipsis;
+                                            white-space: nowrap;
+                                        `}
+                                    >
+                                        {path.split(/[\\/]/).pop()}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const StagesTab: React.FunctionComponent<{
     settings: ReaderSettings;
     setSettings: (value: ReaderSettings) => void;
@@ -285,8 +619,28 @@ const StagesTab: React.FunctionComponent<{
     setCurTab: (value: number) => void;
     fontName: string;
     onSettingsLoaded: (settings: ReaderSettings) => void;
+    curStageIndex: number;
+    setCurStageIndex: (value: number) => void;
 }> = (props) => {
-    const [selectedStageIndex, setSelectedStageIndex] = useState(0);
+    const [wordListVersion, setWordListVersion] = useState(0);
+    const [allowedWords, setAllowedWords] = useState<string[]>([]);
+
+    useMountEffect(() => {
+        const listenerName = "matchingWords.DecodableReaderSetup";
+        const toolbox = getToolboxBundleExports();
+        if (!toolbox) {
+            throw new Error(
+                "The Reader toolbox must be loaded before its setup dialog.",
+            );
+        }
+
+        // The reader model invokes this only after it has finished loading sample-text words.
+        toolbox.addWordListChangedListener(listenerName, () => {
+            setWordListVersion((version) => version + 1);
+        });
+
+        return () => toolbox.removeWordListChangedListener(listenerName);
+    });
 
     useMountEffect(() => {
         const configuredLetters = new Set(
@@ -318,44 +672,136 @@ const StagesTab: React.FunctionComponent<{
         }
     });
 
-    const activateLongPressForSightWords = useCallback(
-        (textarea: HTMLTextAreaElement | null) => {
-            if (textarea) {
-                getToolboxBundleExports()?.activateLongPressFor($(textarea));
+    const stage = props.settings.stages[props.curStageIndex]!;
+    const stageLetters = new Set(stage.letters.split(" ").filter(Boolean));
+
+    // Allowed-word files live outside React, so fetch their server-cleaned contents whenever the selected stage changes.
+    useEffect(() => {
+        if (props.settings.useAllowedWords !== 1) {
+            return;
+        }
+
+        let isCurrent = true;
+        const fileNames = props.settings.stages
+            .slice(0, props.curStageIndex + 1)
+            .map((oneStage) => oneStage.allowedWordsFile)
+            .filter(Boolean);
+
+        void Promise.all(
+            fileNames.map((fileName) =>
+                getWithConfigAsync<string>("readers/io/allowedWordsList", {
+                    params: { fileName },
+                }),
+            ),
+        ).then((responses) => {
+            if (!isCurrent) {
+                return;
             }
-        },
-        [],
-    );
 
-    const stage = props.settings.stages[selectedStageIndex]!;
+            setAllowedWords(
+                Array.from(
+                    new Set(
+                        responses
+                            .flatMap(
+                                (response) => response?.data.split(",") ?? [],
+                            )
+                            .map((word) => word.trim())
+                            .filter(Boolean),
+                    ),
+                ).sort((firstWord, secondWord) =>
+                    firstWord.localeCompare(secondWord),
+                ),
+            );
+        });
 
-    const stageLetters = new Set(stage.letters.split(" "));
-    const matchingWords = Array.from(
-        new Set(
-            props.settings.stages
-                .slice(0, selectedStageIndex + 1)
-                .flatMap((oneStage) =>
-                    cleanSightWords(oneStage.sightWords).split(/\s+/),
-                )
-                .filter(Boolean),
-        ),
-    ).sort((firstWord, secondWord) => firstWord.localeCompare(secondWord));
+        return () => {
+            isCurrent = false;
+        };
+    }, [props.settings, props.curStageIndex]);
 
     const allLetters = props.settings.letters
         .trim()
         .split(/\s+/)
         .filter(Boolean);
+
+    const matchingWords = React.useMemo(() => {
+        if (props.settings.useAllowedWords === 1) {
+            return allowedWords;
+        }
+
+        const knownGpcs = props.settings.stages
+            .slice(0, props.curStageIndex + 1)
+            .flatMap((oneStage) => oneStage.letters.split(/\s+/))
+            .filter(Boolean);
+        const sightWords = props.settings.stages
+            .slice(0, props.curStageIndex + 1)
+            .flatMap((oneStage) =>
+                cleanSightWords(oneStage.sightWords).split(/\s+/),
+            )
+            .filter(Boolean);
+        const typedSampleWords = cleanSightWords(props.settings.moreWords)
+            .split(/\s+/)
+            .filter(Boolean)
+            .filter((word) =>
+                hasOnlyKnownGraphemes(word, allLetters, knownGpcs),
+            );
+        const toolbox = getToolboxBundleExports();
+        if (!toolbox) {
+            throw new Error(
+                "The Reader toolbox must be loaded before its setup dialog.",
+            );
+        }
+        const sampleTextMatchingWords =
+            knownGpcs.length === 0
+                ? []
+                : toolbox.getDecodableStageMatchingWords(knownGpcs);
+
+        return Array.from(
+            new Set([
+                ...sampleTextMatchingWords,
+                ...sightWords,
+                ...typedSampleWords,
+            ]),
+        ).sort((firstWord, secondWord) => firstWord.localeCompare(secondWord));
+    }, [allowedWords, props.settings, props.curStageIndex, wordListVersion]);
+
     const previousLetters = new Set(
         props.settings.stages
-            .slice(0, selectedStageIndex)
+            .slice(0, props.curStageIndex)
             .flatMap((previousStage) => previousStage.letters.split(" ")),
     );
 
     const updateStage = (change: (updatedStage: ReaderStage) => void) => {
         const updatedSettings = cloneReaderSettings(props.settings);
-        change(updatedSettings.stages[selectedStageIndex]!);
+        change(updatedSettings.stages[props.curStageIndex]!);
         props.setSettings(updatedSettings);
         props.onSettingsLoaded(updatedSettings);
+    };
+
+    const updateSightWords = (value: string) => {
+        const updatedSettings = cloneReaderSettings(props.settings);
+        updatedSettings.stages[props.curStageIndex]!.sightWords = value;
+        props.setSettings(updatedSettings);
+        props.onSettingsLoaded(updatedSettings);
+    };
+
+    /** Removes an unshared allowed-words file after clearing this stage's reference. */
+    const removeAllowedWordsFile = () => {
+        const fileName = stage.allowedWordsFile;
+        updateStage((updatedStage) => {
+            updatedStage.allowedWordsFile = "";
+        });
+
+        const fileIsUsedByAnotherStage = props.settings.stages.some(
+            (oneStage, index) =>
+                index !== props.curStageIndex &&
+                oneStage.allowedWordsFile === fileName,
+        );
+        if (!fileIsUsedByAnotherStage) {
+            axios.delete(`${getBloomApiPrefix()}readers/io/allowedWordsList`, {
+                params: { fileName },
+            });
+        }
     };
 
     const selectLetter = (letter: string) => {
@@ -375,6 +821,11 @@ const StagesTab: React.FunctionComponent<{
         });
     };
 
+    const tooltip = useL10n(
+        "Remove from this stage",
+        "ReaderSetup.RemoveWordList",
+    );
+
     return (
         <div
             css={css`
@@ -389,8 +840,8 @@ const StagesTab: React.FunctionComponent<{
                 stageIds={props.stageIds}
                 nextStageId={props.nextStageId}
                 setStageIds={props.setStageIds}
-                selectedStageIndex={selectedStageIndex}
-                setSelectedStageIndex={setSelectedStageIndex}
+                selectedStageIndex={props.curStageIndex}
+                setSelectedStageIndex={props.setCurStageIndex}
                 onSettingsLoaded={props.onSettingsLoaded}
                 fontName={props.fontName}
             />
@@ -424,158 +875,256 @@ const StagesTab: React.FunctionComponent<{
                         `}
                     />{" "}
                     <Span l10nKey="ReaderSetup.StageLabel">Stage</Span>{" "}
-                    {selectedStageIndex + 1}
+                    {props.curStageIndex + 1}
                 </div>
-                <div
-                    css={css`
-                        min-width: 0;
-                        padding: 22px;
-                    `}
-                >
+                {props.settings.useAllowedWords == 0 ? (
                     <div
                         css={css`
-                            margin-bottom: 7px;
-                            color: ${kMutedText};
-                            font-size: 8pt;
-                            font-weight: 700;
-                            letter-spacing: 0.03em;
-                            text-transform: uppercase;
+                            min-width: 0;
+                            padding: 22px;
                         `}
                     >
-                        <Span l10nKey="ReaderSetup.SightWordLabel">
-                            New Sight Words
-                        </Span>
-                    </div>
-                    <textarea
-                        aria-label="New Sight Words"
-                        ref={activateLongPressForSightWords}
-                        value={stage.sightWords}
-                        onChange={(event) =>
-                            updateStage((updatedStage) => {
-                                updatedStage.sightWords = event.target.value;
-                            })
-                        }
-                        css={css`
-                            display: block;
-                            width: 325px;
-                            height: 35px;
-                            box-sizing: border-box;
-                            resize: none;
-                            overflow: auto;
-                            border: 1px solid #d8dce0;
-                            border-radius: 6px;
-                            padding: 8px;
-                            color: #202020;
-                            font-family: ${props.fontName};
-                            font-size: 10pt;
-                            line-height: 17px;
-                            &:focus {
-                                outline: none;
-                                border-color: ${kBloomBlue};
-                                border-width: 2px;
-                                padding: 7px 6.5px;
-                            }
-                        `}
-                    />
-                    <div
-                        css={css`
-                            margin-top: 7px;
-                            margin-bottom: 20px;
-                            color: ${kMutedText};
-                            font-size: 9pt;
-                        `}
-                    >
-                        Separate words with spaces.
-                    </div>
-                    <div
-                        css={css`
-                            margin-bottom: 10px;
-                            color: ${kMutedText};
-                            font-size: 8pt;
-                            font-weight: 700;
-                            letter-spacing: 0.03em;
-                            text-transform: uppercase;
-                        `}
-                    >
-                        <Span l10nKey="ReaderSetup.SelectedLetters">
-                            Previous and New Letters
-                        </Span>
-                    </div>
-                    {allLetters.length === 0 ? (
                         <div
                             css={css`
+                                margin-bottom: 7px;
                                 color: ${kMutedText};
-                                margin: 20px 0;
-                                font-size: 10pt;
+                                font-size: 8pt;
+                                font-weight: 700;
+                                letter-spacing: 0.03em;
+                                text-transform: uppercase;
                             `}
                         >
-                            <Span l10nKey="ReaderSetup.FirstSetupAlphabet">
-                                First,
-                            </Span>{" "}
-                            <Link
-                                l10nKey="ReaderSetup.SetupAlphabet"
-                                onClick={() => props.setCurTab(0)}
-                            >
-                                set up the alphabet for this language.
-                            </Link>
+                            <Span l10nKey="ReaderSetup.SightWordLabel">
+                                New Sight Words
+                            </Span>
                         </div>
-                    ) : (
+                        <ReaderDialogTextarea
+                            updateSettings={updateSightWords}
+                            value={stage.sightWords}
+                            css={css`
+                                display: block;
+                                width: 325px;
+                                height: 35px;
+                                box-sizing: border-box;
+                                resize: none;
+                                overflow: auto;
+                                border: 1px solid #d8dce0;
+                                border-radius: 6px;
+                                padding: 8px;
+                                color: #202020;
+                                font-family: ${props.fontName};
+                                font-size: 10pt;
+                                line-height: 17px;
+                                &:focus {
+                                    outline: none;
+                                    border-color: ${kBloomBlue};
+                                    border-width: 2px;
+                                    padding: 7px 6.5px;
+                                }
+                            `}
+                        />
                         <div
                             css={css`
-                                display: grid;
-                                grid-template-columns: repeat(7, 46px);
-                                gap: 8px;
+                                margin-top: 7px;
+                                margin-bottom: 20px;
+                                color: ${kMutedText};
+                                font-size: 9pt;
                             `}
                         >
-                            {allLetters.map((letter) => {
-                                const isPrevious = previousLetters.has(letter);
-                                const isCurrent = stageLetters.has(letter);
-                                return (
-                                    <button
-                                        key={letter}
-                                        onClick={() => selectLetter(letter)}
-                                        css={css`
-                                            width: 46px;
-                                            height: 46px;
-                                            border: ${isCurrent
-                                                ? `1px solid ${kBloomBlue}`
-                                                : isPrevious
-                                                  ? `2px solid ${kBloomBlue}`
-                                                  : "1px solid #e2e5e7"};
-                                            border-radius: 6px;
-                                            background: ${isCurrent
-                                                ? kBloomBlue
-                                                : "white"};
-                                            color: ${isCurrent
-                                                ? "white"
-                                                : isPrevious
-                                                  ? kBloomBlue
-                                                  : "#b7bec5"};
-                                            cursor: ${isPrevious
-                                                ? "default"
-                                                : "pointer"};
-                                            font-family: ${props.fontName};
-                                            font-size: 14pt;
-                                        `}
-                                    >
-                                        {letter}
-                                    </button>
-                                );
-                            })}
+                            Separate words with spaces.
                         </div>
-                    )}
+                        <div
+                            css={css`
+                                margin-bottom: 10px;
+                                color: ${kMutedText};
+                                font-size: 8pt;
+                                font-weight: 700;
+                                letter-spacing: 0.03em;
+                                text-transform: uppercase;
+                            `}
+                        >
+                            <Span l10nKey="ReaderSetup.SelectedLetters">
+                                Previous and New Letters
+                            </Span>
+                        </div>
+                        {allLetters.length === 0 ? (
+                            <div
+                                css={css`
+                                    color: ${kMutedText};
+                                    margin: 20px 0;
+                                    font-size: 9pt;
+                                `}
+                            >
+                                <Span l10nKey="ReaderSetup.FirstSetupAlphabet">
+                                    First,
+                                </Span>{" "}
+                                <Link
+                                    l10nKey="ReaderSetup.SetupAlphabet"
+                                    onClick={() => props.setCurTab(0)}
+                                >
+                                    set up the alphabet for this language.
+                                </Link>
+                            </div>
+                        ) : (
+                            <div
+                                css={css`
+                                    display: grid;
+                                    grid-template-columns: repeat(7, 46px);
+                                    gap: 8px;
+                                `}
+                            >
+                                {allLetters.map((letter) => {
+                                    const isPrevious =
+                                        previousLetters.has(letter);
+                                    const isCurrent = stageLetters.has(letter);
+                                    return (
+                                        <button
+                                            key={letter}
+                                            onClick={() => selectLetter(letter)}
+                                            css={css`
+                                                width: 46px;
+                                                height: 46px;
+                                                border: ${isCurrent
+                                                    ? `1px solid ${kBloomBlue}`
+                                                    : isPrevious
+                                                      ? `1px solid ${kBloomBlue}`
+                                                      : "1px solid #e2e5e7"};
+                                                border-radius: 6px;
+                                                background: ${isCurrent
+                                                    ? kBloomBlue
+                                                    : "white"};
+                                                color: ${isCurrent
+                                                    ? "white"
+                                                    : isPrevious
+                                                      ? kBloomBlue
+                                                      : "#b7bec5"};
+                                                cursor: ${isPrevious
+                                                    ? "default"
+                                                    : "pointer"};
+                                                font-family: ${props.fontName};
+                                                font-size: 14pt;
+                                                overflow: hidden;
+                                            `}
+                                        >
+                                            {letter}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <div
+                            css={css`
+                                margin-top: 12px;
+                                font-size: 9pt;
+                                color: ${kMutedText};
+                            `}
+                        >
+                            <Span l10nKey="ReaderSetup.ClickLetter">
+                                Click a letter to add it to this stage.
+                            </Span>
+                        </div>
+                    </div>
+                ) : (
                     <div
                         css={css`
-                            margin-top: 12px;
-                            font-size: 9pt;
-                            color: ${kMutedText};
+                            min-width: 0;
+                            padding: 22px;
                         `}
                     >
-                        <Span l10nKey="ReaderSetup.ClickLetter">
-                            Click a letter to add it to this stage.
-                        </Span>
+                        <div
+                            css={css`
+                                margin-bottom: 7px;
+                                color: ${kMutedText};
+                                font-size: 8pt;
+                                font-weight: 700;
+                                letter-spacing: 0.03em;
+                                text-transform: uppercase;
+                            `}
+                        >
+                            <Span l10nKey="ReaderSetup.AllowedWordsFile">
+                                Allowed Words File
+                            </Span>
+                        </div>
+                        {stage.allowedWordsFile === "" ? (
+                            <BloomButton
+                                l10nKey="ReaderSetup.ChooseAllowedWordsFile"
+                                hasText={true}
+                                enabled={true}
+                                variant="outlined"
+                                onClick={() =>
+                                    get(
+                                        "readers/ui/chooseAllowedWordsListFile",
+                                        (result) => {
+                                            if (result.data) {
+                                                updateStage((updatedStage) => {
+                                                    updatedStage.allowedWordsFile =
+                                                        result.data;
+                                                });
+                                            }
+                                        },
+                                    )
+                                }
+                            >
+                                Choose...
+                            </BloomButton>
+                        ) : (
+                            <div
+                                css={css`
+                                    display: flex;
+                                    align-items: center;
+                                    min-height: 42px;
+                                    box-sizing: border-box;
+                                    border: 1px solid #e1e4e6;
+                                    border-radius: 7px;
+                                    color: #707477;
+                                    font-size: 9pt;
+                                `}
+                            >
+                                <InsertDriveFileOutlinedIcon
+                                    css={css`
+                                        margin: 0 12px;
+                                        color: #8a949d;
+                                        font-size: 19px;
+                                    `}
+                                />
+                                <span
+                                    css={css`
+                                        min-width: 0;
+                                        overflow: hidden;
+                                        text-overflow: ellipsis;
+                                        white-space: nowrap;
+                                    `}
+                                >
+                                    {stage.allowedWordsFile}
+                                </span>
+                                <div
+                                    css={css`
+                                        margin-left: auto;
+                                        margin-right: 4px;
+                                    `}
+                                >
+                                    <BloomTooltip
+                                        tip={tooltip}
+                                        placement="top-end"
+                                    >
+                                        <IconButton
+                                            aria-label="Remove allowed words file"
+                                            onClick={removeAllowedWordsFile}
+                                            css={css`
+                                                color: #858a8e;
+                                                .MuiSvgIcon-root {
+                                                    font-size: 18px;
+                                                }
+                                            `}
+                                        >
+                                            <DeleteOutlineIcon />
+                                        </IconButton>
+                                    </BloomTooltip>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                </div>
+                )}
                 <div
                     css={css`
                         display: flex;

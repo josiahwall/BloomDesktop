@@ -1,10 +1,8 @@
 import { css } from "@emotion/react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import { IconButton, Button } from "@mui/material";
+import { Button } from "@mui/material";
 import * as React from "react";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { kBloomBlue } from "../../../../utils/colorUtils";
 import { ReaderSettings, ReaderStage } from "../ReaderSettings";
 import { cleanSightWords } from "./decodableStagesUtils";
@@ -26,16 +24,15 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { Span } from "../../../../react_components/l10nComponents";
 import { cloneReaderSettings } from "./decodableStagesUtils";
 
-/** Displays one sortable decodable-reader stage, including its overflow control. */
+/** Displays one sortable decodable-reader stage. */
 const DraggablePhaseRow: React.FunctionComponent<{
     id: string;
     index: number;
     stage: ReaderStage;
     isSelected: boolean;
-    isExpanded: boolean;
+    useAllowedWords: boolean;
     fontName: string;
     onSelect: () => void;
-    onToggleExpanded: () => void;
 }> = (props) => {
     const {
         attributes,
@@ -45,33 +42,6 @@ const DraggablePhaseRow: React.FunctionComponent<{
         transition,
         isDragging,
     } = useSortable({ id: props.id });
-    const lettersCellRef = useRef<HTMLSpanElement>(null);
-    const sightWordsCellRef = useRef<HTMLSpanElement>(null);
-    const [hasWrappedContent, setHasWrappedContent] = useState(false);
-    const checkForWrappedContent = useCallback(() => {
-        if (props.isExpanded) {
-            return;
-        }
-
-        setHasWrappedContent(
-            [lettersCellRef.current, sightWordsCellRef.current].some(
-                (cell) => cell && cell.scrollHeight > cell.clientHeight,
-            ),
-        );
-    }, [props.isExpanded]);
-
-    // A ResizeObserver is needed to synchronize the row with browser layout changes.
-    useLayoutEffect(() => {
-        checkForWrappedContent();
-        const observer = new ResizeObserver(checkForWrappedContent);
-        if (lettersCellRef.current) {
-            observer.observe(lettersCellRef.current);
-        }
-        if (sightWordsCellRef.current) {
-            observer.observe(sightWordsCellRef.current);
-        }
-        return () => observer.disconnect();
-    }, [checkForWrappedContent, props.stage.letters, props.stage.sightWords]);
 
     return (
         <div
@@ -95,10 +65,12 @@ const DraggablePhaseRow: React.FunctionComponent<{
                 display: grid;
                 width: 100%;
                 box-sizing: border-box;
-                grid-template-columns: 76px 88px minmax(0, 1fr);
-                align-items: ${props.isExpanded ? "start" : "center"};
+                grid-template-columns: ${props.useAllowedWords
+                    ? "76px minmax(0, 1fr)"
+                    : "76px 88px minmax(0, 1fr)"};
+                align-items: start;
                 min-height: 42px;
-                padding: ${props.isExpanded ? "10px 14px" : "0 14px"};
+                padding: 10px 14px;
                 border: 0;
                 border-bottom: 1px solid #eeeeee;
                 background: ${props.isSelected ? "#e4f3f4" : "white"};
@@ -122,81 +94,51 @@ const DraggablePhaseRow: React.FunctionComponent<{
             >
                 {props.index + 1}
             </span>
-            <span
-                ref={lettersCellRef}
-                css={css`
-                    display: block;
-                    min-width: 0;
-                    box-sizing: border-box;
-                    padding-right: 12px;
-                    line-height: 18px;
-                    overflow-wrap: break-word;
-                    ${props.isExpanded
-                        ? ""
-                        : "max-height: 18px; overflow: hidden;"}
-                    color: #202020;
-                    font-family: ${props.fontName};
-                `}
-            >
-                {props.stage.letters}
-            </span>
-            <span
-                ref={sightWordsCellRef}
-                css={css`
-                    display: block;
-                    min-width: 0;
-                    padding-right: 22px;
-                    line-height: 18px;
-                    overflow-wrap: break-word;
-                    ${props.isExpanded
-                        ? ""
-                        : "max-height: 18px; overflow: hidden;"}
-                    color: #4a4a4a;
-                    font-family: ${props.fontName};
-                `}
-            >
-                {cleanSightWords(props.stage.sightWords)}
-            </span>
-            <IconButton
-                aria-label={`${
-                    props.isExpanded ? "Hide" : "Show"
-                } all of stage ${props.index + 1}`}
-                aria-expanded={props.isExpanded}
-                disabled={!hasWrappedContent}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => {
-                    event.stopPropagation();
-                    props.onSelect();
-                    if (hasWrappedContent) {
-                        props.onToggleExpanded();
-                    }
-                }}
-                css={css`
-                    position: absolute;
-                    top: 8px;
-                    right: 8px;
-                    width: 24px;
-                    height: 24px;
-                    padding: 0;
-                    border: 0;
-                    border-radius: 0;
-                    background: transparent;
-                    color: ${props.isSelected ? kBloomBlue : "#8a929c"};
-                    cursor: ${hasWrappedContent ? "pointer" : "default"};
-                    transform: ${props.isExpanded ? "rotate(90deg)" : "none"};
-                    &:hover {
-                        background: transparent;
-                    }
-                    &:disabled {
-                        opacity: 0.5;
-                    }
-                    .MuiSvgIcon-root {
-                        font-size: 22px;
-                    }
-                `}
-            >
-                <ChevronRightIcon />
-            </IconButton>
+            {props.useAllowedWords ? (
+                <span
+                    css={css`
+                        display: block;
+                        min-width: 0;
+                        padding-right: 22px;
+                        line-height: 18px;
+                        overflow-wrap: break-word;
+                        color: #4a4a4a;
+                        font-family: ${props.fontName};
+                    `}
+                >
+                    {props.stage.allowedWordsFile}
+                </span>
+            ) : (
+                <>
+                    <span
+                        css={css`
+                            display: block;
+                            min-width: 0;
+                            box-sizing: border-box;
+                            padding-right: 12px;
+                            line-height: 18px;
+                            overflow-wrap: break-word;
+                            color: #202020;
+                            font-family: ${props.fontName};
+                        `}
+                    >
+                        {props.stage.letters}
+                    </span>
+                    <span
+                        css={css`
+                            display: block;
+                            min-width: 0;
+                            padding-right: 22px;
+                            line-height: 18px;
+                            overflow-wrap: break-word;
+                            color: #4a4a4a;
+                            font-family: ${props.fontName};
+                        `}
+                    >
+                        {cleanSightWords(props.stage.sightWords)}
+                    </span>
+                </>
+            )}
         </div>
     );
 };
@@ -212,10 +154,6 @@ export const ReaderDialogPhaseSection: React.FunctionComponent<{
     onSettingsLoaded: (settings: ReaderSettings) => void;
     fontName: string;
 }> = (props) => {
-    const [expandedStageIds, setExpandedStageIds] = useState<Set<string>>(
-        new Set(),
-    );
-
     const stageSensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: { distance: 8 },
@@ -247,18 +185,6 @@ export const ReaderDialogPhaseSection: React.FunctionComponent<{
         );
         props.setSettings(updatedSettings);
         props.onSettingsLoaded(updatedSettings);
-    };
-
-    const toggleExpandedStage = (stageId: string) => {
-        setExpandedStageIds((previousExpandedStageIds) => {
-            const updatedExpandedStageIds = new Set(previousExpandedStageIds);
-            if (updatedExpandedStageIds.has(stageId)) {
-                updatedExpandedStageIds.delete(stageId);
-            } else {
-                updatedExpandedStageIds.add(stageId);
-            }
-            return updatedExpandedStageIds;
-        });
     };
 
     const reorderStages = (event: DragEndEvent) => {
@@ -300,7 +226,10 @@ export const ReaderDialogPhaseSection: React.FunctionComponent<{
             <div
                 css={css`
                     display: grid;
-                    grid-template-columns: 76px 88px 1fr;
+                    grid-template-columns: ${props.settings.useAllowedWords ===
+                    1
+                        ? "76px minmax(0, 1fr)"
+                        : "76px 88px minmax(0, 1fr)"};
                     padding: 11px 14px;
                     background: #fafafa;
                     border-bottom: 1px solid #e5e5e5;
@@ -312,8 +241,18 @@ export const ReaderDialogPhaseSection: React.FunctionComponent<{
                 `}
             >
                 <Span l10nKey="ReaderSetup.StageLabel">Stage</Span>
-                <Span l10nKey="ReaderSetup.lettersHeader">Letters</Span>
-                <Span l10nKey="ReaderSetup.SightWordsHeader">Sight Words</Span>
+                {props.settings.useAllowedWords === 1 ? (
+                    <Span l10nKey="ReaderSetup.AllowedWordsFileHeader">
+                        Allowed Words File
+                    </Span>
+                ) : (
+                    <>
+                        <Span l10nKey="ReaderSetup.lettersHeader">Letters</Span>
+                        <Span l10nKey="ReaderSetup.SightWordsHeader">
+                            Sight Words
+                        </Span>
+                    </>
+                )}
             </div>
             <div
                 css={css`
@@ -338,15 +277,12 @@ export const ReaderDialogPhaseSection: React.FunctionComponent<{
                                 index={index}
                                 stage={oneStage}
                                 isSelected={index === props.selectedStageIndex}
-                                isExpanded={expandedStageIds.has(
-                                    props.stageIds[index]!,
-                                )}
+                                useAllowedWords={
+                                    props.settings.useAllowedWords === 1
+                                }
                                 fontName={props.fontName}
                                 onSelect={() =>
                                     props.setSelectedStageIndex(index)
-                                }
-                                onToggleExpanded={() =>
-                                    toggleExpandedStage(props.stageIds[index]!)
                                 }
                             />
                         ))}

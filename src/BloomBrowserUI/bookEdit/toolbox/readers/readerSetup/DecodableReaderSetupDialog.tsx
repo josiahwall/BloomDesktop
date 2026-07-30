@@ -54,6 +54,7 @@ const DecodableReaderSetupDialogLauncher: React.FunctionComponent<{
                 settings,
                 initialSettings.current.moreWords,
                 initialSettings.current.letters,
+                initialSettings.current.useAllowedWords,
             )
             .then(close);
     };

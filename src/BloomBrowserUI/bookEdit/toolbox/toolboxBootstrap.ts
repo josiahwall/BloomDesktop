@@ -23,9 +23,13 @@ import { GameTool, setActiveDragActivityTab } from "./games/GameTool";
 import { SettingsTool } from "./settings/settingsTool";
 // Explicit imports needed so that these symbols are in local scope for the window.toolboxBundle object
 import {
+    getDecodableStageMatchingWords,
+    addSampleTextFilesChangedListener,
     addWordListChangedListener,
     beginSaveChangedSettings,
     makeLetterWordList,
+    removeSampleTextFilesChangedListener,
+    removeWordListChangedListener,
 } from "./readers/readerTools";
 import { activateLongPressFor } from "../js/bloomEditing";
 import { IAudioRecorder } from "./talkingBook/IAudioRecorder";
@@ -37,12 +41,24 @@ export interface IToolboxFrameExports {
         settings: import("./readers/ReaderSettings").ReaderSettings,
         previousMoreWords: string,
         previousLetters: string,
+        previousUseAllowedWords?: number,
     ): Promise<void>;
 
     addWordListChangedListener(
         listenerNameAndContext: string,
         callback: () => void,
     ): void;
+
+    removeWordListChangedListener(listenerNameAndContext: string): void;
+
+    getDecodableStageMatchingWords(knownGpcs: string[]): string[];
+
+    addSampleTextFilesChangedListener(
+        listenerNameAndContext: string,
+        callback: () => void,
+    ): void;
+
+    removeSampleTextFilesChangedListener(listenerNameAndContext: string): void;
 
     activateLongPressFor(jQuerySetOfMatchedElements): void;
 
@@ -69,9 +85,13 @@ export {
     closeSetupDialog,
 } from "./readers/readerSetup/readerSetupDialog";
 export {
+    getDecodableStageMatchingWords,
+    addSampleTextFilesChangedListener,
     addWordListChangedListener,
     beginSaveChangedSettings,
     makeLetterWordList,
+    removeSampleTextFilesChangedListener,
+    removeWordListChangedListener,
 } from "./readers/readerTools";
 export { activateLongPressFor } from "../js/bloomEditing";
 export { TalkingBookTool }; // one function is called by CSharp.
@@ -147,9 +167,13 @@ const toolboxBundle: ToolboxBundleApi = {
     showSetupDialog,
     initializeReaderSetupDialog,
     closeSetupDialog,
+    getDecodableStageMatchingWords,
+    addSampleTextFilesChangedListener,
     addWordListChangedListener,
     beginSaveChangedSettings,
     makeLetterWordList,
+    removeSampleTextFilesChangedListener,
+    removeWordListChangedListener,
     activateLongPressFor,
     TalkingBookTool,
     canUndo,
